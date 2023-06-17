@@ -65,11 +65,13 @@ cardinality_error_4_unscaled
 
 
 def get_file_path(dir_names):
-    result = []
-    for dir in dir_names:
+    list_path = []
+    list_alias = []
+    for dir in dir_names.keys():
         path = os.path.join(".", "exps", dir)
-        result.append(Path(path))
-    return result
+        list_path.append(Path(path))
+        list_alias.append(dir_names[dir])
+    return list_path, list_alias
 
 
 model_path = "./exps/effi_v2s_deformable_detr/"
@@ -82,38 +84,27 @@ compare_path = "./exps/resnet_deformable_detr3"
 compare_path = "./exps/original"
 
 
-list_path = ["original",
-             "mobilenet_v3_deformable_detr",
-             "mobilenet_v3_deformable_detr_b2",
-             "resnet_deformable_detr_lr1e-4",
-             "resnet_deformable_detr_lr5e-5"
-             ]
+dict_path = {"original": "original",
+             "resnet_deformable_detr_lr1e-4_b2": "resnet-50_ddetr",
+             "mobilenet_v3_deformable_detr_b2": "mb-v3L_ddetr",
+             "effi_v2s_deformable_detr": "effi-v2S_ddetr",
+             "swin_deformable_detr": "swin-T_ddetr"
+             }
 
-list_path = ["original",
-             "effi_v2s_deformable_detr",
-             "mobilenet_v3_deformable_detr_b2",
-             "resnet_deformable_detr_lr1e-4_b2"]
+# dict_path = {"original": "original",
+#              "resnet_deformable_detr_lr1e-4_b2": "resnet-50_ddetr",
+#              }
 
-list_path = ["original",
-             "resnet_deformable_detr_lr2e-4",
-             "resnet_deformable_detr_lr1e-4",
-             "resnet_deformable_detr_lr5e-5",
-             ]
 
-list_path = ["original",
-             "resnet_deformable_detr_lr1e-4_b2",
-             "mobilenet_v3_deformable_detr_b2",
-             "effi_v2s_deformable_detr"
-             ]
-
-file = get_file_path(list_path)
+list_path, list_alias = get_file_path(dict_path)
 num_epoch = 50
 
 
 fields = ("loss", "class_error", "loss_bbox", "loss_giou")
-fig, _ = plot_logs(logs=file, fields=fields, num_epoch=num_epoch)
-fig.savefig("result.png")
+fig, _ = plot_logs(logs=list_path, fields=fields,
+                   num_epoch=num_epoch, alias=list_alias)
+fig.savefig("result_loss_per_epoch.png")
 
 
-fig, _ = plot_mAP(logs=file, num_epoch=num_epoch)
-fig.savefig("result_map.png")
+fig, _ = plot_mAP(logs=list_path, num_epoch=num_epoch, alias=list_alias)
+fig.savefig("result_ap_per_epoch.png")

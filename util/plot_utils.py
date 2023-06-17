@@ -21,7 +21,7 @@ import numpy as np
 import json
 
 
-def plot_logs(logs, fields=('class_error', 'loss_bbox_unscaled', 'mAP'), ewm_col=0, log_name='log.txt', num_epoch=1):
+def plot_logs(logs, alias, fields=('class_error', 'loss_bbox_unscaled', 'mAP'), ewm_col=0, log_name='log.txt', num_epoch=1, ):
     '''
     Function to plot specific fields from training log(s). Plots both training and test results.
 
@@ -95,40 +95,45 @@ def plot_logs(logs, fields=('class_error', 'loss_bbox_unscaled', 'mAP'), ewm_col
         if field in "mAP":
             return fig, axs
         ax.get_legend().remove()
+
     # legend
     lines = axs[0][0].get_lines()
-    legend_line = fig.legend([lines[i] for i in range(len(logs))], [
-        "train", "test"], loc=8, bbox_to_anchor=(0.6, 0.01))
-    legend_color = fig.legend([lines[2 * i] for i in range(len(logs))], [Path(
-        p).name for p in logs], loc=8, bbox_to_anchor=(0.4, 0.01))
-    fig.add_artist(legend_line)
+    fig.legend([lines[i] for i in range(len(logs))], [
+        "train", "eval"], loc=8, bbox_to_anchor=(0.63, 0.03))
+    fig.legend([lines[2 * i] for i in range(len(logs))], [Path(
+        p).name for p in alias], loc=8, bbox_to_anchor=(0.4, 0.01), ncol=2)
+    # fig.add_artist(legend_line)
     fig.tight_layout()
-    fig.subplots_adjust(bottom=1.0 / (5 * nrows))
+    fig.subplots_adjust(bottom=1.0 / (4 * nrows))
     return fig, axs
 
 
-def plot_mAP(logs, ewm_col=0, log_name='log.txt', num_epoch=1):
+def plot_mAP(logs, alias, ewm_col=0, log_name='log.txt', num_epoch=1):
     columns_full = ["AP", "AP_50", "AP_75", "AP_small", "AP_medium", "AP_large",
                     "AR_1", "AR_10", "AR_100", "AR_small", "AR_medium", "AR_large"]
     columns = ["AP", "AP_50", "AP_75", "AP_small", "AP_medium", "AP_large"]
 
     dfs = [pd.read_json(Path(l) / log_name, lines=True,
                         nrows=num_epoch) for l in logs]
-
     dfs = [pd.DataFrame(df['test_coco_eval_bbox'].to_list(),
                         columns=columns_full) for df in dfs]
-    ncols = 3
-    nrows = 2
+
+    ncols = 2
+    nrows = 3
     fig, axs = plt.subplots(nrows=nrows, ncols=ncols,
                             figsize=(5 * ncols, 5 * nrows))
     colors = sns.color_palette(n_colors=len(logs))
     for i, ax in enumerate(axs.ravel()):
-        for l, df, color in zip(logs, dfs, colors):
-            ax.plot(df.index, df[columns[i]], color=color, label=l)
-            ax.legend()
+        lines = []
+        for l, df, color in zip(alias, dfs, colors):
+            line, = ax.plot(df.index, df[columns[i]], color=color, label=l)
+            lines.append(line)
             ax.set_title(columns[i])
 
     # fig.legend(colors, logs)
+    fig.legend(lines, alias, loc='lower center', ncol=2)
+    fig.tight_layout()
+    fig.subplots_adjust(bottom=1.0 / (5 * nrows))
 
     return fig, axs
 
