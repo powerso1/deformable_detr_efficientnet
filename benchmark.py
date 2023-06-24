@@ -64,6 +64,7 @@ def benchmark():
         model.load_state_dict(ckpt['model'])
     inputs = nested_tensor_from_tensor_list(
         [dataset.__getitem__(0)[0].cuda() for _ in range(args.batch_size)])
+    print(inputs.shape())
     t = measure_average_inference_time(
         model, inputs, args.num_iters, args.warm_iters)
     return 1.0 / t * args.batch_size
