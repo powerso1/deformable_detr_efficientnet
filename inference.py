@@ -2,6 +2,7 @@ from main import get_args_parser
 from models import build_model
 import argparse
 import torch
+from models.deformable_detr import PostProcess
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
@@ -9,12 +10,12 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     args.resume = "./exps/mobilenet_v3_deformable_detr_b2/checkpoint0049.pth"
-    args.device = "cuda:1"
+    args.device = "cuda:0"
     args.backbone = "mobilenet"
     args.num_feature_levels = 1
     print(args)
 
-    model, _, postprocess = build_model(args)
+    model, _, _ = build_model(args)
     model.to(args.device)
     model.eval()
 
@@ -26,5 +27,7 @@ if __name__ == "__main__":
     tensor_list = torch.randn(1, 3, 450, 613)
     inputs = tensor_list.to(args.device)
     x = model(inputs)
-    y = postprocess(x)
+    print(x.keys())
+    postprocess = PostProcess()
+    y=postprocess(x,(400,600))
     print(y)
