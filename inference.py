@@ -43,12 +43,15 @@ if __name__ == "__main__":
     # print(y[0]["labels"])
     # print(y[0]["boxes"])
 
-    boxes = y[0]["boxes"]
+    for s,l,b in zip(y[0]["scores"], y[0]["labels"], y[0]["boxes"]):
+        print(s,l,b)
+        break
 
     # Draw bounding boxes on image
     for box in boxes:
         x_min, y_min, x_max, y_max = box.int().cpu().numpy()
         cv2.rectangle(img, (x_min, y_min), (x_max, y_max), (0, 255, 0), 2)
+
 
     # Save image with bounding boxes as output.png
     # Convert the RGB image to BGR format
