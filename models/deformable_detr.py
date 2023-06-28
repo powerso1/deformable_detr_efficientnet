@@ -435,8 +435,16 @@ class PostProcess(nn.Module):
         print(out_logits.shape)
         assert len(out_logits) == len(target_sizes)
         assert target_sizes.shape[1] == 2
+        
+        print("*"*100)
+        print(out_logits.shape)
+        print(out_logits)
 
         prob = out_logits.sigmoid()
+
+        print(prob.shape)
+        print(prob)
+
         topk_values, topk_indexes = torch.topk(
             prob.view(out_logits.shape[0], -1), 100, dim=1)
         scores = topk_values
