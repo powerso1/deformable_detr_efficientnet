@@ -71,7 +71,7 @@ def benchmark():
 
 
 if __name__ == '__main__':
-    torch.cuda.reset_max_memory_allocated()
+    torch.cuda.reset_peak_memory_stats()
 
     fps = benchmark()
     print(f'Inference Speed: {fps:.1f} FPS')
