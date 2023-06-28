@@ -8,3 +8,4 @@ __pycache__
 /exps
 models/ops/build
 models/ops/MultiScaleDeformableAttention.egg-info
+weight
