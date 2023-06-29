@@ -3,3 +3,5 @@ torchvision
 torchaudio
 scipy==1.10.1
 pycocotools
+pandas
+seaborn

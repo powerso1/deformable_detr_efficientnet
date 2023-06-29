@@ -20,6 +20,7 @@ from setuptools import setup
 
 requirements = ["torch", "torchvision"]
 
+
 def get_extensions():
     this_dir = os.path.dirname(os.path.abspath(__file__))
     extensions_dir = os.path.join(this_dir, "src")
@@ -58,6 +59,7 @@ def get_extensions():
         )
     ]
     return ext_modules
+
 
 setup(
     name="MultiScaleDeformableAttention",

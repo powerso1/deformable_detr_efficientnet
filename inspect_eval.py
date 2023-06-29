@@ -1,11 +1,15 @@
-import torch
-import pandas as pd
 from pathlib import Path
+
+import pandas as pd
+import torch
+
 from util.plot_utils import plot_precision_recall
 
 
 def load_eval(eval_path):
     data = torch.load(eval_path)
+    print(data["scores"].shape)
+    print(data["precision"].shape)
     # precision is n_iou, n_points, n_cat, n_area, max_det
     precision = data['precision']
     # take precision for all classes, all areas and 100 detections
@@ -24,6 +28,7 @@ def load_eval(eval_path):
         'clock', 'vase', 'scissors', 'teddy bear', 'hair drier', 'toothbrush'
     ]
     CLASSES = [c for c in CLASSES if c != 'N/A']
+    print(len(CLASSES))
     area = 0
     return pd.DataFrame.from_dict({c: p for c, p in zip(CLASSES, precision[0, :, :, area, -1].mean(0) * 100)}, orient='index')
 
@@ -31,4 +36,4 @@ def load_eval(eval_path):
 path = "./exps/resnet_deformable_detr3/"
 path = "./exps/original/"
 data = load_eval(path + '/eval/latest.pth')
-print(data.to_string())
+# print(data.to_string())

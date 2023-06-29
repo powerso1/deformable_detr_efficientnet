@@ -432,18 +432,10 @@ class PostProcess(nn.Module):
         """
         out_logits, out_bbox = outputs['pred_logits'], outputs['pred_boxes']
 
-        print(out_logits.shape)
         assert len(out_logits) == len(target_sizes)
         assert target_sizes.shape[1] == 2
-        
-        print("*"*100)
-        print(out_logits.shape)
-        print(out_logits)
 
         prob = out_logits.sigmoid()
-
-        print(prob.shape)
-        print(prob)
 
         topk_values, topk_indexes = torch.topk(
             prob.view(out_logits.shape[0], -1), 100, dim=1)
@@ -487,15 +479,16 @@ def build(args):
         num_classes = 250
     device = torch.device(args.device)
 
-    if "efficientnet" in args.backbone:
-        backbone = build_efficientnet_backbone(args)
+    if "resnet50" in args.backbone:
+        backbone = build_backbone(args)
     elif "mobilenet" in args.backbone:
         backbone = build_mobilenet_backbone(args)
+    elif "efficientnet" in args.backbone:
+        backbone = build_efficientnet_backbone(args)
     elif "swin" in args.backbone:
         backbone = build_swin_transformer_backbone(args)
-
     else:
-        backbone = build_backbone(args)
+        raise ValueError(f"Invalid backbone parameter {args.backbone}")
 
     transformer = build_deforamble_transformer(args)
     model = DeformableDETR(

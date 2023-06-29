@@ -1,4 +1,4 @@
-from main import get_args_parser
+import datasets.transforms as T
 from models import build_model
 import argparse
 import torch
@@ -6,54 +6,146 @@ from models.deformable_detr import PostProcess
 import matplotlib.pyplot as plt
 import cv2
 import numpy as np
+from main import get_args_parser
+import random
+from PIL import Image
+import sys
+import os
+
+
+model_name_dict = {
+    "resnet50": "res-50_ddetr",
+    "mobilenet": "mb-v3L_ddetr",
+    "efficientnet": "effi-v2S_ddetr",
+    "swin": "swin-T_ddetr"
+}
+
+CLASSES = [
+    'N/A', 'person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus',
+    'train', 'truck', 'boat', 'traffic light', 'fire hydrant', 'N/A', 'stop sign',
+    'parking meter', 'bench', 'bird', 'cat', 'dog', 'horse', 'sheep', 'cow',
+    'elephant', 'bear', 'zebra', 'giraffe', 'N/A', 'backpack', 'umbrella', 'N/A', 'N/A',
+    'handbag', 'tie', 'suitcase', 'frisbee', 'skis', 'snowboard', 'sports ball',
+    'kite', 'baseball bat', 'baseball glove', 'skateboard', 'surfboard', 'tennis racket',
+    'bottle', 'N/A', 'wine glass', 'cup', 'fork', 'knife', 'spoon', 'bowl',
+    'banana', 'apple', 'sandwich', 'orange', 'broccoli', 'carrot', 'hot dog', 'pizza',
+    'donut', 'cake', 'chair', 'couch', 'potted plant', 'bed', 'N/A', 'dining table',
+    'N/A', 'N/A', 'toilet', 'N/A', 'tv', 'laptop', 'mouse', 'remote', 'keyboard', 'cell phone',
+    'microwave', 'oven', 'toaster', 'sink', 'refrigerator', 'N/A', 'book',
+    'clock', 'vase', 'scissors', 'teddy bear', 'hair drier', 'toothbrush'
+]
+
+random.seed(2001)
+colors = [[random.randint(0, 255) for _ in range(3)]
+          for _ in range(len(CLASSES))]
+
+
+def plot_one_box(img, box, color, label=None, line_thickness=3):
+    # Plots one bounding box on image img
+    tl = line_thickness or round(
+        0.002 * (img.shape[0] + img.shape[1]) / 2) + 1  # line/font thickness
+    color = color or [random.randint(0, 255) for _ in range(3)]
+    c1, c2 = (box[0], box[1]), (box[2], box[3])
+    cv2.rectangle(img, c1, c2, color, thickness=tl, lineType=cv2.LINE_AA)
+    if label:
+        tf = max(tl - 1, 1)  # font thickness
+        t_size = cv2.getTextSize(label, 0, fontScale=tl / 3, thickness=tf)[0]
+        c2 = c1[0] + t_size[0], c1[1] - t_size[1] - 3
+        cv2.rectangle(img, c1, c2, color, -1, cv2.LINE_AA)  # filled
+        cv2.putText(img, label, (c1[0], c1[1] - 2), 0, tl / 3,
+                    [225, 255, 255], thickness=tf, lineType=cv2.LINE_AA)
+
+
+def init_inference_transform():
+    """ inspired by "from datasets.coco import make_coco_transforms" """
+    normalize = T.Compose([
+        T.ToTensor(),
+        T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+    ])
+
+    return T.Compose([
+        T.RandomResize([800], max_size=1333),
+        normalize,
+    ])
+
+
+def inference_one_image(model, device, img_path):
+    # Read the input image using PIL (RGB) cause transform is designed for PIL
+    img = Image.open(img_path).convert("RGB")
+
+    transform = init_inference_transform()
+    tensor, _ = transform(image=img, target=None)
+    tensor_list = tensor.unsqueeze(0)
+
+    # Convert to CV2 image
+    img_cv2 = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
+
+    inputs = tensor_list.to(device)
+    raw_output = model(inputs)
+
+    postprocess = PostProcess()
+    target_sizes = torch.tensor(
+        [[img_cv2.shape[0], img_cv2.shape[1]]]).to(device)
+    output = postprocess(raw_output, target_sizes)
+
+    scores = output[0]["scores"].cpu().tolist()
+    scores = [round(score, 2) for score in scores]
+    labels = output[0]["labels"].cpu().tolist()
+    boxes = output[0]["boxes"].int().cpu().numpy().tolist()
+
+    for s, l, b in zip(scores, labels, boxes):
+        if s >= 0.5:
+            plot_one_box(img_cv2, box=b, color=colors[l], label=str(
+                CLASSES[l]) + " " + str(s))
+
+    return img_cv2
+
 
 if __name__ == "__main__":
+    # set up args parser
     parser = argparse.ArgumentParser(
         'Deformable DETR training and evaluation script', parents=[get_args_parser()])
+
+    parser.add_argument('--folder', action='store_true',
+                        help='Use this flag to process a folder of images')
+    parser.add_argument('--inf_path', type=str, default='input.png',
+                        help='Path to the input image or folder of images for inference')
+
     args = parser.parse_args()
 
-    args.backbone = "resnet50"
-    args.resume = "weight/res-50_ddetr/checkpoint0049.pth"
-    args.device = "cuda:0"
-    args.num_feature_levels = 1
-    print(args)
+    model_path = os.path.join(
+        ".", "weight", model_name_dict[args.backbone], "checkpoint0049.pth")
 
+    # intialize model
     model, _, _ = build_model(args)
     model.to(args.device)
     model.eval()
 
-    if args.resume is not None:
-        ckpt = torch.load(
-            args.resume, map_location=lambda storage, loc: storage)
-        model.load_state_dict(ckpt['model'])
+    ckpt = torch.load(model_path, map_location=lambda storage, loc: storage)
+    model.load_state_dict(ckpt['model'])
 
-    # Read the input image using OpenCV
-    img = cv2.imread("input.png")
+    if args.folder:
+        # Get a list of all image files in the folder
+        img_files = [os.path.join(args.inf_path, f) for f in os.listdir(
+            args.inf_path) if f.endswith('.png') or f.endswith('.jpeg') or f.endswith('.jpg')]
 
-    # Convert the image to a tensor
-    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)  # Convert BGR to RGB
-    tensor_list = torch.from_numpy(np.expand_dims(img.transpose(2, 0, 1), axis=0)).float().div(255)
+        output_folder = os.path.join(
+            ".", "output_img", model_name_dict[args.backbone])
+        os.makedirs(output_folder, exist_ok=True)
 
-    inputs = tensor_list.to(args.device)
-    x = model(inputs)
-    postprocess = PostProcess()
-    target_sizes = torch.tensor([[img.shape[0], img.shape[1]]]).to(args.device)
-    y = postprocess(x, target_sizes)
-    # print(y[0]["scores"])
-    # print(y[0]["labels"])
-    # print(y[0]["boxes"])
+        # Process each image file in the folder
+        for img_file in img_files:
+            # Perform object detection on the image
+            result_img = inference_one_image(model, args.device, img_file)
 
-    for s,l,b in zip(y[0]["scores"], y[0]["labels"], y[0]["boxes"]):
-        print(s,l,b)
-        break
+            # Save the image with predicted bounding boxes
+            output_path = os.path.join(
+                output_folder, os.path.basename(img_file))
+            cv2.imwrite(output_path, result_img)
+    else:
+        # Perform object detection on a single image
+        result_img = inference_one_image(model, args.device, args.inf_path)
 
-    # Draw bounding boxes on image
-    for box in boxes:
-        x_min, y_min, x_max, y_max = box.int().cpu().numpy()
-        cv2.rectangle(img, (x_min, y_min), (x_max, y_max), (0, 255, 0), 2)
-
-
-    # Save image with bounding boxes as output.png
-    # Convert the RGB image to BGR format
-    output_img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
-    cv2.imwrite("output.png", output_img)
+        # Save the image with predicted bounding boxes
+        output_path = "output.png"
+        cv2.imwrite(output_path, result_img)
