@@ -50,9 +50,9 @@ def plot_one_box(img, box, color, label=None, line_thickness=3):
     if label:
         tf = max(tl - 1, 1)  # font thickness
         t_size = cv2.getTextSize(label, 0, fontScale=tl / 3, thickness=tf)[0]
-        c2 = c1[0] + t_size[0], c1[1] - t_size[1] - 3
+        c2 = c1[0] + t_size[0], c1[1] + t_size[1] + 5
         cv2.rectangle(img, c1, c2, color, -1, cv2.LINE_AA)  # filled
-        cv2.putText(img, label, (c1[0], c1[1] - 2), 0, tl / 3,
+        cv2.putText(img, label, (c1[0], c1[1] + t_size[1] + 2), 0, tl / 3,
                     [225, 255, 255], thickness=tf, lineType=cv2.LINE_AA)
 
 
@@ -135,6 +135,8 @@ if __name__ == "__main__":
 
         # Process each image file in the folder
         for img_file in img_files:
+            print(img_file)
+
             # Perform object detection on the image
             result_img = inference_one_image(model, args.device, img_file)
 

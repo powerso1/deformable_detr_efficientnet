@@ -9,3 +9,4 @@ __pycache__
 models/ops/build
 models/ops/MultiScaleDeformableAttention.egg-info
 weight
+output_img
