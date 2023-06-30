@@ -91,11 +91,6 @@ dict_path = {"original": "original",
              "swin_deformable_detr": "swin-T_ddetr"
              }
 
-# dict_path = {"original": "original",
-#              "resnet_deformable_detr_lr1e-4_b2": "resnet-50_ddetr",
-#              }
-
-
 list_path, list_alias = get_file_path(dict_path)
 num_epoch = 50
 

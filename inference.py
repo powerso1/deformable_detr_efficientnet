@@ -35,9 +35,12 @@ CLASSES = [
     'clock', 'vase', 'scissors', 'teddy bear', 'hair drier', 'toothbrush'
 ]
 
-random.seed(2001)
-colors = [[random.randint(0, 255) for _ in range(3)]
-          for _ in range(len(CLASSES))]
+
+def make_colors():
+    seed = 2001
+    random.seed(seed)
+    return [[random.randint(0, 255) for _ in range(3)]
+            for _ in range(len(CLASSES))]
 
 
 def plot_one_box(img, box, color, label=None, line_thickness=3):
@@ -92,6 +95,8 @@ def inference_one_image(model, device, img_path):
     scores = [round(score, 2) for score in scores]
     labels = output[0]["labels"].cpu().tolist()
     boxes = output[0]["boxes"].int().cpu().numpy().tolist()
+
+    colors = make_colors()
 
     for s, l, b in zip(scores, labels, boxes):
         if s >= 0.5:
