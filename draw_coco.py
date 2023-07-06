@@ -32,7 +32,6 @@ for img_file in img_files:
     file_name_without_extension = os.path.splitext(file_name)[0]
 
     img_id = int(file_name_without_extension)
-    print(img_id)
 
     ann_ids = coco.getAnnIds(imgIds=img_id, iscrowd=False)
     anns = coco.loadAnns(ann_ids)

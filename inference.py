@@ -45,8 +45,7 @@ def make_colors():
 
 def plot_one_box(img, box, color, label=None, line_thickness=3):
     # Plots one bounding box on image img
-    tl = line_thickness or round(
-        0.002 * (img.shape[0] + img.shape[1]) / 2) + 1  # line/font thickness
+    tl = line_thickness
     color = color or [random.randint(0, 255) for _ in range(3)]
     c1, c2 = (box[0], box[1]), (box[2], box[3])
     cv2.rectangle(img, c1, c2, color, thickness=tl, lineType=cv2.LINE_AA)
