@@ -1,5 +1,5 @@
 import datasets.transforms as T
-from models import build_model
+from models.deformable_detr_debug import build
 import argparse
 import torch
 from models.deformable_detr import PostProcess
@@ -116,17 +116,18 @@ if __name__ == "__main__":
                         help='Path to the input image or folder of images for inference')
 
     args = parser.parse_args()
+    args.debug = True
 
     model_path = os.path.join(
         ".", "weight", model_name_dict[args.backbone], "checkpoint0049.pth")
 
     # intialize model
-    model, _, _ = build_model(args)
+    model, _, _ = build(args)
     model.to(args.device)
-    model.eval()
 
     ckpt = torch.load(model_path, map_location=lambda storage, loc: storage)
     model.load_state_dict(ckpt['model'])
+    model.eval()
 
     if args.folder:
         # Get a list of all image files in the folder
