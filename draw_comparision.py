@@ -2,13 +2,12 @@ import cv2
 import os
 import time
 
-
-# Resize the first image to be enlarged by 2 times the width and height
-# enlarged_image = cv2.resize(img5, (img5.shape[1] * 2, img5.shape[0] * 2))
-
-
-# enlarged_image = cv2.copyMakeBorder(enlarged_image, border_size, border_size, 0, 0,
-#                                     cv2.BORDER_CONSTANT, value=(255, 255, 255))
+BORDER_SIZE = 50
+TEXT_COLOR = (0, 0, 0)  # Black color
+TEXT_FONT = cv2.FONT_HERSHEY_SIMPLEX
+TEXT_SCALE = 1
+TEXT_THICKNESS = 2
+TEXT_PADDING = 10  # Padding around the text
 
 
 def write_text_to_image_comparision(dict_text_image: dict):
@@ -44,12 +43,6 @@ if __name__ == "__main__":
         coco_path) if f.endswith('.png') or f.endswith('.jpeg') or f.endswith('.jpg')]
 
     for img_file in img_files:
-        BORDER_SIZE = 50
-        TEXT_COLOR = (0, 0, 0)  # Black color
-        TEXT_FONT = cv2.FONT_HERSHEY_SIMPLEX
-        TEXT_SCALE = 1
-        TEXT_THICKNESS = 2
-        TEXT_PADDING = 10  # Padding around the text
 
         # write text to coco image
         img_coco = cv2.imread(img_file)

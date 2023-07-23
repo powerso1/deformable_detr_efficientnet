@@ -11,7 +11,7 @@ import random
 from PIL import Image
 import sys
 import os
-
+# from torchinfo import summary
 
 model_name_dict = {
     "resnet50": "res-50_ddetr",
@@ -84,6 +84,8 @@ def inference_one_image(model, device, img_path):
 
     inputs = tensor_list.to(device)
     raw_output = model(inputs)
+    # DEBUG
+    # summary(model, input_size=(1, 3, 800, 600), depth=100)
 
     postprocess = PostProcess()
     target_sizes = torch.tensor(
@@ -98,7 +100,7 @@ def inference_one_image(model, device, img_path):
     colors = make_colors()
 
     for s, l, b in zip(scores, labels, boxes):
-        if s >= 0.2:
+        if s >= 0.5:
             plot_one_box(img_cv2, box=b, color=colors[l], label=str(
                 CLASSES[l]) + " " + str(s))
 

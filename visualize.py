@@ -74,21 +74,15 @@ def get_file_path(dir_names):
     return list_path, list_alias
 
 
-model_path = "./exps/effi_v2s_deformable_detr/"
-model_path = "./exps/mobilenet_v3_deformable_detr/"
-model_path = "./exps/resnet_deformable_detr/"
-# with open(model_path + "log.txt", 'r') as fp:
-#     num_line = len(fp.readlines())
-
-compare_path = "./exps/resnet_deformable_detr3"
-compare_path = "./exps/original"
-
-
-dict_path = {"original": "original",
+dict_path = {"original": "res50-ddetr-ss-paper",
              "resnet_deformable_detr_lr1e-4_b2": "resnet-50_ddetr",
              "mobilenet_v3_deformable_detr_b2": "mb-v3L_ddetr",
              "effi_v2s_deformable_detr": "effi-v2S_ddetr",
              "swin_deformable_detr": "swin-T_ddetr"
+             }
+
+dict_path = {"original": "res50-ddetr-ss-paper",
+             "resnet_deformable_detr_lr1e-4_b2": "resnet-50_ddetr",
              }
 
 list_path, list_alias = get_file_path(dict_path)

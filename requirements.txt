@@ -5,3 +5,6 @@ scipy==1.10.1
 pycocotools
 pandas
 seaborn
+flask
+streamlit
+flask_cors

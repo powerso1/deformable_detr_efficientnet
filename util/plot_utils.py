@@ -61,12 +61,14 @@ def plot_logs(logs, alias, fields=('class_error', 'loss_bbox_unscaled', 'mAP'), 
     # load log file(s) and plot
     dfs = [pd.read_json(Path(p) / log_name, lines=True,
                         nrows=num_epoch) for p in logs]
+
     ncols = int(round(math.sqrt(len(fields))))
     nrows = int(math.ceil(len(fields) / ncols))
     fig, axs = plt.subplots(nrows=nrows, ncols=ncols,
                             figsize=(5 * ncols, 5 * nrows))
     colors = sns.color_palette(n_colors=len(logs))
     for df, color in zip(dfs, colors):
+        print(df)
         for j, field in enumerate(fields):
             # print(j, j // ncols, j % ncols)
             if field == 'mAP':
@@ -77,6 +79,7 @@ def plot_logs(logs, alias, fields=('class_error', 'loss_bbox_unscaled', 'mAP'), 
                 return fig, axs
 
             else:
+                print(df.interpolate().ewm(com=ewm_col))
                 df.interpolate().ewm(com=ewm_col).mean().plot(
                     y=[f'train_{field}', f'test_{field}'],
                     ax=axs[j // ncols][j % ncols],

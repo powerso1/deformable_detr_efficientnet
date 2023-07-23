@@ -71,6 +71,45 @@ def init_inference_transform():
     ])
 
 
+def plot_feauture_map(img, keep, conv_features, dec_attn_weights, bboxes_scaled):
+    # get the feature map shape
+    h, w = conv_features['0'].tensors.shape[-2:]
+
+    # print(dec_attn_weights.shape)
+    # print(keep.shape)
+
+    fig, axs = plt.subplots(ncols=len(bboxes_scaled), nrows=2, figsize=(22, 7))
+    for idx, ax_i, (xmin, ymin, xmax, ymax) in zip(keep, axs.T, bboxes_scaled):
+        # ax = ax_i[0]
+        # ax.imshow(dec_attn_weights[0, idx].view(h, w))
+        # ax.axis('off')
+        # ax.set_title(f'query id: {idx.item()}')
+        # ax = ax_i[1]
+        # ax.imshow(img)
+        # ax.add_patch(plt.Rectangle((xmin, ymin), xmax - xmin, ymax - ymin,
+        #                            fill=False, color='blue', linewidth=3))
+        # ax.axis('off')
+        # ax.set_title(CLASSES[probas[idx].argmax()])
+        pass
+    fig.tight_layout()
+    fig.savefig('feature_map.png')
+
+
+# for output bounding box post-processing
+def box_cxcywh_to_xyxy(x):
+    x_c, y_c, w, h = x.unbind(1)
+    b = [(x_c - 0.5 * w), (y_c - 0.5 * h),
+         (x_c + 0.5 * w), (y_c + 0.5 * h)]
+    return torch.stack(b, dim=1)
+
+
+def rescale_bboxes(out_bbox, size):
+    img_w, img_h = size
+    b = box_cxcywh_to_xyxy(out_bbox)
+    b = b * torch.tensor([img_w, img_h, img_w, img_h], dtype=torch.float32)
+    return b
+
+
 def inference_one_image(model, device, img_path):
     # Read the input image using PIL (RGB) cause transform is designed for PIL
     img = Image.open(img_path).convert("RGB")
@@ -80,29 +119,95 @@ def inference_one_image(model, device, img_path):
     tensor_list = tensor.unsqueeze(0)
 
     # Convert to CV2 image
-    img_cv2 = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
+    # img_cv2 = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
+
+    # use lists to store the outputs via up-values
+    conv_features, enc_attn_weights, dec_attn_weights = [], [], []
+
+    hooks = [
+        model.backbone[-2].register_forward_hook(
+            lambda self, input, output: conv_features.append(output)
+        ),
+        model.transformer.encoder.layers[-1].self_attn.register_forward_hook(
+            lambda self, input, output: enc_attn_weights.append(output[1])
+        ),
+        model.transformer.decoder.layers[-1].cross_attn.register_forward_hook(
+            lambda self, input, output: dec_attn_weights.append(output[1])
+        ),
+    ]
 
     inputs = tensor_list.to(device)
-    raw_output = model(inputs)
+    outputs = model(inputs)
+    # keep only predictions with 0.7+ confidence
 
-    postprocess = PostProcess()
-    target_sizes = torch.tensor(
-        [[img_cv2.shape[0], img_cv2.shape[1]]]).to(device)
-    output = postprocess(raw_output, target_sizes)
+    probas = outputs['pred_logits'].softmax(-1)[0, :, :-1]
+    keep = probas.max(-1).values > 0.5
 
-    scores = output[0]["scores"].cpu().tolist()
-    scores = [round(score, 2) for score in scores]
-    labels = output[0]["labels"].cpu().tolist()
-    boxes = output[0]["boxes"].int().cpu().numpy().tolist()
+    # convert boxes from [0; 1] to image scales
+    bboxes_scaled = rescale_bboxes(
+        outputs['pred_boxes'][0, keep].cpu(), img.size)
 
-    colors = make_colors()
+    # for hook in hooks:
+    #     hook.remove()
 
-    for s, l, b in zip(scores, labels, boxes):
-        if s >= 0.2:
-            plot_one_box(img_cv2, box=b, color=colors[l], label=str(
-                CLASSES[l]) + " " + str(s))
+    # don't need the list anymore
+    conv_features = conv_features[0]
+    enc_attn_weights = enc_attn_weights[0]
+    dec_attn_weights = dec_attn_weights[0]
 
-    return img_cv2
+    # print(conv_features)
+    print(enc_attn_weights.shape)
+    print(dec_attn_weights.shape)
+    print(enc_attn_weights[0][0])
+
+    # print(model.transformer.encoder.layers[-1])
+    # print(model.transformer.decoder.layers[-1].cross_attn)
+
+    # get the feature map shape
+    h, w = conv_features['0'].tensors.shape[-2:]
+
+    fig, axs = plt.subplots(ncols=len(bboxes_scaled), nrows=2, figsize=(22, 7))
+    COLORS = [[0.000, 0.447, 0.741], [0.850, 0.325, 0.098], [0.929, 0.694, 0.125],
+              [0.494, 0.184, 0.556], [0.466, 0.674, 0.188], [0.301, 0.745, 0.933]]
+    colors = COLORS * 100
+
+    for idx, ax_i, (xmin, ymin, xmax, ymax) in zip(keep.nonzero(), axs.T, bboxes_scaled):
+        ax = ax_i[0]
+        ax.imshow(dec_attn_weights[0, idx].view(h, w))
+        ax.axis('off')
+        ax.set_title(f'query id: {idx.item()}')
+        ax = ax_i[1]
+        ax.imshow(img)
+        ax.add_patch(plt.Rectangle((xmin, ymin), xmax - xmin, ymax - ymin,
+                                   fill=False, color='blue', linewidth=3))
+        ax.axis('off')
+        ax.set_title(CLASSES[probas[idx].argmax()])
+    fig.tight_layout()
+    fig.savefig('feature_map.png')
+
+    # print(dec_attn_weights)
+
+    # postprocess = PostProcess()
+    # target_sizes = torch.tensor(
+    #     [[img_cv2.shape[0], img_cv2.shape[1]]]).to(device)
+    # output = postprocess(raw_output, target_sizes)
+
+    # scores = output[0]["scores"].cpu().tolist()
+    # scores = [round(score, 2) for score in scores]
+    # labels = output[0]["labels"].cpu().tolist()
+    # boxes = output[0]["boxes"].int().cpu().numpy().tolist()
+
+    # plot_feauture_map(img_cv2, keep, conv_features,
+    #                   dec_attn_weights, boxes)
+
+    # colors = make_colors()
+
+    # for s, l, b in zip(scores, labels, boxes):
+    #     if s >= 0.2:
+    #         plot_one_box(img_cv2, box=b, color=colors[l], label=str(
+    #             CLASSES[l]) + " " + str(s))
+
+    return 1
 
 
 if __name__ == "__main__":
@@ -116,7 +221,6 @@ if __name__ == "__main__":
                         help='Path to the input image or folder of images for inference')
 
     args = parser.parse_args()
-    args.debug = True
 
     model_path = os.path.join(
         ".", "weight", model_name_dict[args.backbone], "checkpoint0049.pth")

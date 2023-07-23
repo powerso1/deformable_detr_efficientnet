@@ -17,7 +17,30 @@ from torch import nn, Tensor
 from torch.nn.init import xavier_uniform_, constant_, uniform_, normal_
 
 from util.misc import inverse_sigmoid
-from models.ops.modules import MSDeformAttn
+from models.ops.modules.ms_deform_attn_debug import MSDeformAttn
+import numpy as np
+import matplotlib.pyplot as plt
+
+
+# def show_tensor(tensor):
+#     # transfer the tensor to CPU memory
+#     tensor_cpu = tensor.cpu()
+#     tensor_cpu = tensor_cpu.detach().numpy()[0]
+#     tensor_cpu = (tensor_cpu - tensor_cpu.min()) / \
+#         (tensor_cpu.max() - tensor_cpu.min())
+#     tensor_cpu = (tensor_cpu * 255).astype(np.uint8)
+#     # transpose the tensor to match the expected shape for 3D plotting
+#     # print(tensor_cpu[:3, :, :])
+
+#     # create a figure and 3 subplots
+#     fig, ax = plt.subplots(1, 1)
+#     # fig.set_size_inches(12, 4)
+
+#     ax.imshow(tensor_cpu, cmap='gray')
+#     ax.axis('off')
+
+#     # save the figure as 3 separate images
+#     plt.savefig('image_encoder.png', dpi=300, bbox_inches='tight')
 
 
 class DeformableTransformer(nn.Module):
@@ -167,43 +190,24 @@ class DeformableTransformer(nn.Module):
         memory = self.encoder(src_flatten, spatial_shapes, level_start_index,
                               valid_ratios, lvl_pos_embed_flatten, mask_flatten)
 
+        # print(memory)
+        # show_tensor(memory)
+
         # prepare input for decoder
         bs, _, c = memory.shape
-        if self.two_stage:
-            output_memory, output_proposals = self.gen_encoder_output_proposals(
-                memory, mask_flatten, spatial_shapes)
 
-            # hack implementation for two-stage Deformable DETR
-            enc_outputs_class = self.decoder.class_embed[self.decoder.num_layers](
-                output_memory)
-            enc_outputs_coord_unact = self.decoder.bbox_embed[self.decoder.num_layers](
-                output_memory) + output_proposals
-
-            topk = self.two_stage_num_proposals
-            topk_proposals = torch.topk(
-                enc_outputs_class[..., 0], topk, dim=1)[1]
-            topk_coords_unact = torch.gather(
-                enc_outputs_coord_unact, 1, topk_proposals.unsqueeze(-1).repeat(1, 1, 4))
-            topk_coords_unact = topk_coords_unact.detach()
-            reference_points = topk_coords_unact.sigmoid()
-            init_reference_out = reference_points
-            pos_trans_out = self.pos_trans_norm(self.pos_trans(
-                self.get_proposal_pos_embed(topk_coords_unact)))
-            query_embed, tgt = torch.split(pos_trans_out, c, dim=2)
-        else:
-            query_embed, tgt = torch.split(query_embed, c, dim=1)
-            query_embed = query_embed.unsqueeze(0).expand(bs, -1, -1)
-            tgt = tgt.unsqueeze(0).expand(bs, -1, -1)
-            reference_points = self.reference_points(query_embed).sigmoid()
-            init_reference_out = reference_points
+        query_embed, tgt = torch.split(query_embed, c, dim=1)
+        query_embed = query_embed.unsqueeze(0).expand(bs, -1, -1)
+        tgt = tgt.unsqueeze(0).expand(bs, -1, -1)
+        reference_points = self.reference_points(query_embed).sigmoid()
+        init_reference_out = reference_points
 
         # decoder
         hs, inter_references = self.decoder(tgt, reference_points, memory,
                                             spatial_shapes, level_start_index, valid_ratios, query_embed, mask_flatten)
 
         inter_references_out = inter_references
-        if self.two_stage:
-            return hs, init_reference_out, inter_references_out, enc_outputs_class, enc_outputs_coord_unact
+
         return hs, init_reference_out, inter_references_out, None, None
 
 
@@ -240,7 +244,7 @@ class DeformableTransformerEncoderLayer(nn.Module):
     def forward(self, src, pos, reference_points, spatial_shapes, level_start_index, padding_mask=None):
         # self attention
         src2 = self.self_attn(self.with_pos_embed(
-            src, pos), reference_points, src, spatial_shapes, level_start_index, padding_mask)
+            src, pos), reference_points, src, spatial_shapes, level_start_index, padding_mask)[0]
         src = src + self.dropout1(src2)
         src = self.norm1(src)
 
@@ -271,6 +275,7 @@ class DeformableTransformerEncoder(nn.Module):
             reference_points_list.append(ref)
         reference_points = torch.cat(reference_points_list, 1)
         reference_points = reference_points[:, :, None] * valid_ratios[:, None]
+        print("hahahaahah", valid_ratios)
         return reference_points
 
     def forward(self, src, spatial_shapes, level_start_index, valid_ratios, pos=None, padding_mask=None):
@@ -330,7 +335,7 @@ class DeformableTransformerDecoderLayer(nn.Module):
         # cross attention
         tgt2 = self.cross_attn(self.with_pos_embed(tgt, query_pos),
                                reference_points,
-                               src, src_spatial_shapes, level_start_index, src_padding_mask)
+                               src, src_spatial_shapes, level_start_index, src_padding_mask)[0]
         tgt = tgt + self.dropout1(tgt2)
         tgt = self.norm1(tgt)
 
