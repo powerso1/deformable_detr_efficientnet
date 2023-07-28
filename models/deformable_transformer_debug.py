@@ -71,13 +71,7 @@ class DeformableTransformer(nn.Module):
         self.level_embed = nn.Parameter(
             torch.Tensor(num_feature_levels, d_model))
 
-        if two_stage:
-            self.enc_output = nn.Linear(d_model, d_model)
-            self.enc_output_norm = nn.LayerNorm(d_model)
-            self.pos_trans = nn.Linear(d_model * 2, d_model * 2)
-            self.pos_trans_norm = nn.LayerNorm(d_model * 2)
-        else:
-            self.reference_points = nn.Linear(d_model, 2)
+        self.reference_points = nn.Linear(d_model, 2)
 
         self._reset_parameters()
 
@@ -92,62 +86,6 @@ class DeformableTransformer(nn.Module):
             xavier_uniform_(self.reference_points.weight.data, gain=1.0)
             constant_(self.reference_points.bias.data, 0.)
         normal_(self.level_embed)
-
-    def get_proposal_pos_embed(self, proposals):
-        num_pos_feats = 128
-        temperature = 10000
-        scale = 2 * math.pi
-
-        dim_t = torch.arange(
-            num_pos_feats, dtype=torch.float32, device=proposals.device)
-        dim_t = temperature ** (2 * (dim_t // 2) / num_pos_feats)
-        # N, L, 4
-        proposals = proposals.sigmoid() * scale
-        # N, L, 4, 128
-        pos = proposals[:, :, :, None] / dim_t
-        # N, L, 4, 64, 2
-        pos = torch.stack(
-            (pos[:, :, :, 0::2].sin(), pos[:, :, :, 1::2].cos()), dim=4).flatten(2)
-        return pos
-
-    def gen_encoder_output_proposals(self, memory, memory_padding_mask, spatial_shapes):
-        N_, S_, C_ = memory.shape
-        base_scale = 4.0
-        proposals = []
-        _cur = 0
-        for lvl, (H_, W_) in enumerate(spatial_shapes):
-            mask_flatten_ = memory_padding_mask[:, _cur:(
-                _cur + H_ * W_)].view(N_, H_, W_, 1)
-            valid_H = torch.sum(~mask_flatten_[:, :, 0, 0], 1)
-            valid_W = torch.sum(~mask_flatten_[:, 0, :, 0], 1)
-
-            grid_y, grid_x = torch.meshgrid(torch.linspace(0, H_ - 1, H_, dtype=torch.float32, device=memory.device),
-                                            torch.linspace(0, W_ - 1, W_, dtype=torch.float32, device=memory.device))
-            grid = torch.cat([grid_x.unsqueeze(-1), grid_y.unsqueeze(-1)], -1)
-
-            scale = torch.cat(
-                [valid_W.unsqueeze(-1), valid_H.unsqueeze(-1)], 1).view(N_, 1, 1, 2)
-            grid = (grid.unsqueeze(0).expand(N_, -1, -1, -1) + 0.5) / scale
-            wh = torch.ones_like(grid) * 0.05 * (2.0 ** lvl)
-            proposal = torch.cat((grid, wh), -1).view(N_, -1, 4)
-            proposals.append(proposal)
-            _cur += (H_ * W_)
-        output_proposals = torch.cat(proposals, 1)
-        output_proposals_valid = ((output_proposals > 0.01) & (
-            output_proposals < 0.99)).all(-1, keepdim=True)
-        output_proposals = torch.log(output_proposals / (1 - output_proposals))
-        output_proposals = output_proposals.masked_fill(
-            memory_padding_mask.unsqueeze(-1), float('inf'))
-        output_proposals = output_proposals.masked_fill(
-            ~output_proposals_valid, float('inf'))
-
-        output_memory = memory
-        output_memory = output_memory.masked_fill(
-            memory_padding_mask.unsqueeze(-1), float(0))
-        output_memory = output_memory.masked_fill(
-            ~output_proposals_valid, float(0))
-        output_memory = self.enc_output_norm(self.enc_output(output_memory))
-        return output_memory, output_proposals
 
     def get_valid_ratio(self, mask):
         _, H, W = mask.shape
@@ -195,7 +133,6 @@ class DeformableTransformer(nn.Module):
 
         # prepare input for decoder
         bs, _, c = memory.shape
-
         query_embed, tgt = torch.split(query_embed, c, dim=1)
         query_embed = query_embed.unsqueeze(0).expand(bs, -1, -1)
         tgt = tgt.unsqueeze(0).expand(bs, -1, -1)
@@ -242,6 +179,7 @@ class DeformableTransformerEncoderLayer(nn.Module):
         return src
 
     def forward(self, src, pos, reference_points, spatial_shapes, level_start_index, padding_mask=None):
+        print("\nThis is Encoder Layer")
         # self attention
         src2 = self.self_attn(self.with_pos_embed(
             src, pos), reference_points, src, spatial_shapes, level_start_index, padding_mask)[0]
@@ -275,7 +213,6 @@ class DeformableTransformerEncoder(nn.Module):
             reference_points_list.append(ref)
         reference_points = torch.cat(reference_points_list, 1)
         reference_points = reference_points[:, :, None] * valid_ratios[:, None]
-        print("hahahaahah", valid_ratios)
         return reference_points
 
     def forward(self, src, spatial_shapes, level_start_index, valid_ratios, pos=None, padding_mask=None):
@@ -325,6 +262,8 @@ class DeformableTransformerDecoderLayer(nn.Module):
         return tgt
 
     def forward(self, tgt, query_pos, reference_points, src, src_spatial_shapes, level_start_index, src_padding_mask=None):
+        print("\nThis is Decoder Layer")
+
         # self attention
         q = k = self.with_pos_embed(tgt, query_pos)
         tgt2 = self.self_attn(q.transpose(0, 1), k.transpose(
@@ -362,39 +301,20 @@ class DeformableTransformerDecoder(nn.Module):
         intermediate = []
         intermediate_reference_points = []
         for lid, layer in enumerate(self.layers):
-            if reference_points.shape[-1] == 4:
-                reference_points_input = reference_points[:, :, None] \
-                    * torch.cat([src_valid_ratios, src_valid_ratios], -1)[:, None]
-            else:
-                assert reference_points.shape[-1] == 2
-                reference_points_input = reference_points[:,
-                                                          :, None] * src_valid_ratios[:, None]
+
+            assert reference_points.shape[-1] == 2
+            reference_points_input = reference_points[:,
+                                                      :, None] * src_valid_ratios[:, None]
             output = layer(output, query_pos, reference_points_input, src,
                            src_spatial_shapes, src_level_start_index, src_padding_mask)
 
-            # hack implementation for iterative bounding box refinement
-            if self.bbox_embed is not None:
-                tmp = self.bbox_embed[lid](output)
-                if reference_points.shape[-1] == 4:
-                    new_reference_points = tmp + \
-                        inverse_sigmoid(reference_points)
-                    new_reference_points = new_reference_points.sigmoid()
-                else:
-                    assert reference_points.shape[-1] == 2
-                    new_reference_points = tmp
-                    new_reference_points[..., :2] = tmp[...,
-                                                        :2] + inverse_sigmoid(reference_points)
-                    new_reference_points = new_reference_points.sigmoid()
-                reference_points = new_reference_points.detach()
+            intermediate.append(output)
+            intermediate_reference_points.append(reference_points)
 
-            if self.return_intermediate:
-                intermediate.append(output)
-                intermediate_reference_points.append(reference_points)
-
-        if self.return_intermediate:
-            return torch.stack(intermediate), torch.stack(intermediate_reference_points)
-
-        return output, reference_points
+        print("intermediate", torch.stack(intermediate).shape)
+        print("intermediate_reference_points", torch.stack(
+            intermediate_reference_points).shape)
+        return torch.stack(intermediate), torch.stack(intermediate_reference_points)
 
 
 def _get_clones(module, N):

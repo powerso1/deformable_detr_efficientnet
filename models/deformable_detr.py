@@ -20,7 +20,7 @@ from util.misc import (NestedTensor, nested_tensor_from_tensor_list,
                        accuracy, get_world_size, interpolate,
                        is_dist_avail_and_initialized, inverse_sigmoid)
 
-from .backbone import build_backbone, build_efficientnet_backbone, build_mobilenet_backbone, build_swin_transformer_backbone
+from .backbone import build_backbone, build_efficientnet_backbone, build_mobilenet_backbone, build_swin_transformer_backbone, build_swin_fixed_backbone
 from .matcher import build_matcher
 from .segmentation import (DETRsegm, PostProcessPanoptic, PostProcessSegm,
                            dice_loss, sigmoid_focal_loss)
@@ -487,6 +487,8 @@ def build(args):
         backbone = build_efficientnet_backbone(args)
     elif "swin" in args.backbone:
         backbone = build_swin_transformer_backbone(args)
+    elif "swinfixed" in args.backbone:
+        backbone = build_swin_fixed_backbone(args)
     else:
         raise ValueError(f"Invalid backbone parameter {args.backbone}")
 

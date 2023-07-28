@@ -1,14 +1,17 @@
-import torch
+import matplotlib.pyplot as plt
 
-W_ = 4
-H_ = 3
-device = 'cpu'
+# Define the colors
+COLORS = [[0.000, 0.447, 0.741], [0.850, 0.325, 0.098], [0.929, 0.694, 0.125],
+          [0.494, 0.184, 0.556], [0.466, 0.674, 0.188], [0.301, 0.745, 0.933]]
 
-ref_x, ref_y = torch.meshgrid(torch.linspace(0.5, W_ - 0.5, W_, dtype=torch.float32, device=device),
-                              torch.linspace(0.5, H_ - 0.5, H_, dtype=torch.float32, device=device))
+# Create a bar chart of the colors
+plt.bar(range(len(COLORS)), [1] * len(COLORS), color=COLORS)
 
+# Set the x-axis tick labels and title
+plt.xticks(range(len(COLORS)), ["Color {}".format(i + 1)
+           for i in range(len(COLORS))])
+plt.xlabel("Colors")
+plt.title("Color Bar Chart")
 
-print(ref_x)
-print(ref_y)
-ref = torch.stack((ref_x, ref_y), -1)
-print(ref.shape)
+# Show the plot
+plt.savefig('color_bar.png')

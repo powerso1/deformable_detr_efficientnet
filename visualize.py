@@ -78,21 +78,22 @@ dict_path = {"original": "res50-ddetr-ss-paper",
              "resnet_deformable_detr_lr1e-4_b2": "resnet-50_ddetr",
              "mobilenet_v3_deformable_detr_b2": "mb-v3L_ddetr",
              "effi_v2s_deformable_detr": "effi-v2S_ddetr",
-             "swin_deformable_detr": "swin-T_ddetr"
+             "swin_deformable_detr": "swin-T_ddetr",
+             "swin_ddetr_fixed": "swin-T_ddetr_fixed"
              }
 
-dict_path = {"original": "res50-ddetr-ss-paper",
-             "resnet_deformable_detr_lr1e-4_b2": "resnet-50_ddetr",
-             }
+# dict_path = {"original": "res50-ddetr-ss-paper",
+#              "resnet_deformable_detr_lr1e-4_b2": "resnet-50_ddetr",
+#              }
 
 list_path, list_alias = get_file_path(dict_path)
-num_epoch = 50
+num_epoch = 10
 
 
-fields = ("loss", "class_error", "loss_bbox", "loss_giou")
-fig, _ = plot_logs(logs=list_path, fields=fields,
-                   num_epoch=num_epoch, alias=list_alias)
-fig.savefig("result_loss_per_epoch.png")
+# fields = ("loss", "class_error", "loss_bbox", "loss_giou")
+# fig, _ = plot_logs(logs=list_path, fields=fields,
+#                    num_epoch=num_epoch, alias=list_alias)
+# fig.savefig("result_loss_per_epoch.png")
 
 
 fig, _ = plot_mAP(logs=list_path, num_epoch=num_epoch, alias=list_alias)

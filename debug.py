@@ -11,7 +11,7 @@ import random
 from PIL import Image
 import sys
 import os
-
+import matplotlib.colors as mcolors
 
 model_name_dict = {
     "resnet50": "res-50_ddetr",
@@ -106,10 +106,20 @@ def box_cxcywh_to_xyxy(x):
 def rescale_bboxes(out_bbox, size):
     img_w, img_h = size
     b = box_cxcywh_to_xyxy(out_bbox)
-    b = b * torch.tensor([img_w, img_h, img_w, img_h], dtype=torch.float32)
-    return b
+    b = b * torch.tensor([img_w, img_h, img_w, img_h],
+                         dtype=torch.float32, device="cuda")
+    return b.cpu()
 
 
+def show_encoder_result():
+    pass
+
+
+def show_decoder_result():
+    pass
+
+
+@torch.no_grad()
 def inference_one_image(model, device, img_path):
     # Read the input image using PIL (RGB) cause transform is designed for PIL
     img = Image.open(img_path).convert("RGB")
@@ -129,10 +139,12 @@ def inference_one_image(model, device, img_path):
             lambda self, input, output: conv_features.append(output)
         ),
         model.transformer.encoder.layers[-1].self_attn.register_forward_hook(
-            lambda self, input, output: enc_attn_weights.append(output[1])
+            lambda self, input, output: enc_attn_weights.append(
+                output[1])
         ),
         model.transformer.decoder.layers[-1].cross_attn.register_forward_hook(
-            lambda self, input, output: dec_attn_weights.append(output[1])
+            lambda self, input, output: dec_attn_weights.append(
+                output[1])
         ),
     ]
 
@@ -140,25 +152,24 @@ def inference_one_image(model, device, img_path):
     outputs = model(inputs)
     # keep only predictions with 0.7+ confidence
 
-    probas = outputs['pred_logits'].softmax(-1)[0, :, :-1]
+    probas = outputs['pred_logits'].softmax(-1)[0, :, :-1].to('cpu')
     keep = probas.max(-1).values > 0.5
 
     # convert boxes from [0; 1] to image scales
     bboxes_scaled = rescale_bboxes(
-        outputs['pred_boxes'][0, keep].cpu(), img.size)
+        outputs['pred_boxes'][0, keep], img.size)
 
     # for hook in hooks:
     #     hook.remove()
 
     # don't need the list anymore
     conv_features = conv_features[0]
-    enc_attn_weights = enc_attn_weights[0]
-    dec_attn_weights = dec_attn_weights[0]
+    enc_attn_weights = enc_attn_weights[0].to('cpu')
+    dec_attn_weights = dec_attn_weights[0].to('cpu')
 
     # print(conv_features)
-    print(enc_attn_weights.shape)
-    print(dec_attn_weights.shape)
-    print(enc_attn_weights[0][0])
+    print("enc_attn_weights", enc_attn_weights.shape)
+    print("dec_attn_weights", dec_attn_weights.shape)
 
     # print(model.transformer.encoder.layers[-1])
     # print(model.transformer.decoder.layers[-1].cross_attn)
@@ -167,15 +178,21 @@ def inference_one_image(model, device, img_path):
     h, w = conv_features['0'].tensors.shape[-2:]
 
     fig, axs = plt.subplots(ncols=len(bboxes_scaled), nrows=2, figsize=(22, 7))
-    COLORS = [[0.000, 0.447, 0.741], [0.850, 0.325, 0.098], [0.929, 0.694, 0.125],
-              [0.494, 0.184, 0.556], [0.466, 0.674, 0.188], [0.301, 0.745, 0.933]]
-    colors = COLORS * 100
+
+    # Define the blue color map ranging from blue to white
+    cmap = mcolors.LinearSegmentedColormap.from_list(
+        'blue_scale', [(0, 'white'), (1, 'black')])
 
     for idx, ax_i, (xmin, ymin, xmax, ymax) in zip(keep.nonzero(), axs.T, bboxes_scaled):
+
         ax = ax_i[0]
-        ax.imshow(dec_attn_weights[0, idx].view(h, w))
-        ax.axis('off')
+        ax.imshow(dec_attn_weights[0, idx].view(h, w), cmap=cmap)
+        ax.patch.set_edgecolor('red')  # Add black border
+        ax.patch.set_linewidth(2)  # Set border width
+        ax.set_xticks([])
+        ax.set_yticks([])
         ax.set_title(f'query id: {idx.item()}')
+
         ax = ax_i[1]
         ax.imshow(img)
         ax.add_patch(plt.Rectangle((xmin, ymin), xmax - xmin, ymax - ymin,
@@ -185,27 +202,58 @@ def inference_one_image(model, device, img_path):
     fig.tight_layout()
     fig.savefig('feature_map.png')
 
-    # print(dec_attn_weights)
+    # output of the CNN
+    f_map = conv_features['0']
+    print("Encoder attention:      ", enc_attn_weights[0].shape)
+    print("Feature map:            ", f_map.tensors.shape)
 
-    # postprocess = PostProcess()
-    # target_sizes = torch.tensor(
-    #     [[img_cv2.shape[0], img_cv2.shape[1]]]).to(device)
-    # output = postprocess(raw_output, target_sizes)
+    # get the HxW shape of the feature maps of the CNN
+    shape = f_map.tensors.shape[-2:]
+    # and reshape the self-attention to a more interpretable shape
+    sattn = enc_attn_weights[0].reshape(shape + shape)
+    print("Reshaped self-attention:", sattn.shape)
 
-    # scores = output[0]["scores"].cpu().tolist()
-    # scores = [round(score, 2) for score in scores]
-    # labels = output[0]["labels"].cpu().tolist()
-    # boxes = output[0]["boxes"].int().cpu().numpy().tolist()
+    # downsampling factor for the CNN, is 32 for DETR and 16 for DETR DC5
+    fact = 32
 
-    # plot_feauture_map(img_cv2, keep, conv_features,
-    #                   dec_attn_weights, boxes)
+    # let's select 4 reference points for visualization
+    idxs = [(200, 200), (280, 400), (200, 600), (440, 500),
+            (200, 200)]
+    num_row = 2
+    num_col = (len(idxs) + 1) // num_row
 
-    # colors = make_colors()
+    # here we create the canvas
+    fig = plt.figure(constrained_layout=True, figsize=(25 * 0.7, 8.5 * 0.7))
+    # and we add one plot per reference point
 
-    # for s, l, b in zip(scores, labels, boxes):
-    #     if s >= 0.2:
-    #         plot_one_box(img_cv2, box=b, color=colors[l], label=str(
-    #             CLASSES[l]) + " " + str(s))
+    gs = fig.add_gridspec(2, 2 + num_col)
+
+    # and now let's add the central image, with the reference points as red circles
+    fcenter_ax = fig.add_subplot(gs[:, 0:2])
+    fcenter_ax.imshow(img)
+    for (y, x) in idxs:
+        scale = img.height / img.size[-2]
+        x = ((x // fact) + 0.5) * fact
+        y = ((y // fact) + 0.5) * fact
+        fcenter_ax.add_patch(plt.Circle(
+            (x * scale, y * scale), fact // 2, color='r'))
+        fcenter_ax.axis('off')
+
+    axs = []
+    for i in range(len(idxs)):
+        r, c = i // num_col, i % num_col
+        axs.append(fig.add_subplot(gs[r, 2 + c]))
+
+    # for each one of the reference points, let's plot the self-attention
+    # for that point
+    for idx_o, ax in zip(idxs, axs):
+        idx = (idx_o[0] // fact, idx_o[1] // fact)
+        ax.imshow(sattn[..., idx[0], idx[1]],
+                  cmap='cividis', interpolation='nearest')
+        ax.axis('off')
+        ax.set_title(f'self-attention{idx_o}')
+
+    fig.savefig('feature_map2.png')
 
     return 1
 

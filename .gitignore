@@ -1,6 +1,5 @@
 *.txt
 *.log
-train_efficientnet.log
 __pycache__
 !requirements.txt
 !*log.txt

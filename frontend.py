@@ -34,6 +34,7 @@ with st.sidebar:
 
 
 def recognize(url="http://192.168.1.4:4500/app/detect", body={}):
+    step_by_step = False
     if add_radio == "res-50_ddetr":
         st.markdown("""<p style="font-size:20px">resnet_50_deformable_detr</p>""",
                     unsafe_allow_html=True)
@@ -49,6 +50,7 @@ def recognize(url="http://192.168.1.4:4500/app/detect", body={}):
     elif add_radio == "all models":
         st.markdown("""<p style="font-size:20px">all models</p>""",
                     unsafe_allow_html=True)
+        step_by_step = st.checkbox("Step by step")
 
     uploaded_file = st.file_uploader("Choose image file.", type=[
         'png', 'jpg', 'jpeg', 'PNG', 'JPEG'], accept_multiple_files=False)
@@ -75,7 +77,8 @@ def recognize(url="http://192.168.1.4:4500/app/detect", body={}):
         body = {
             "document": image_base64,
             "threshold": threshold,
-            "model_name": add_radio
+            "model_name": add_radio,
+            "step_by_step": step_by_step
         }
         body = json.dumps(body)
         data = requests.post(url, data=body)
@@ -85,6 +88,7 @@ def recognize(url="http://192.168.1.4:4500/app/detect", body={}):
 
 
 if add_radio in ["res-50_ddetr", "mb-v3L_ddetr", "effi-v2S_ddetr", "swin-T_ddetr", "all models"]:
+
     data = recognize()
     if data is not None:
         data = json.loads(data)

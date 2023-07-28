@@ -81,6 +81,44 @@ class MSDeformAttn(nn.Module):
         xavier_uniform_(self.output_proj.weight.data)
         constant_(self.output_proj.bias.data, 0.)
 
+    def map_attention_weights(self, attention_weights, offset_normalizer, sampling_locations, query_shape, input_shape):
+        N, Len_q, _ = query_shape
+        N, Len_in, _ = input_shape
+        attention_weights = attention_weights.view(
+            N, Len_q, self.n_points * self.n_heads)
+
+        sampling_locations = sampling_locations.view(
+            N, Len_q, self.n_points * self.n_heads, 2)
+
+        print(offset_normalizer)
+
+        spatial_shape = offset_normalizer[0]
+        spatial_w, spatial_h = spatial_shape
+        sampling_location_rescale = torch.floor(sampling_locations *
+                                                spatial_shape[None, None, None, :] - 0.5).int()
+
+        print("spatial_shape", spatial_shape)
+        print("attn_weight", attention_weights.shape)
+        print("w_min", torch.min(attention_weights))
+        print("w_max", torch.max(attention_weights))
+        print("loc", sampling_locations.shape)
+        print("loc_rescale", sampling_location_rescale.shape)
+
+        result = torch.zeros(1, Len_q, Len_in,
+                             dtype=torch.float32, device="cuda")
+        print("result", result.shape)
+
+        for i in range(Len_q):
+            for p in range(self.n_points * self.n_heads):
+                loc_w, loc_h = sampling_location_rescale[0, i, p]
+                if loc_w < 0 or loc_w >= spatial_w or loc_h < 0 or loc_h >= spatial_h:
+                    break
+                coord = loc_h * spatial_w + loc_w
+                # print("i,p,w,h,coord", i, p, loc_w, loc_h, coord)
+                result[0, i, coord] += attention_weights[0, i, p]
+
+        return result
+
     def forward(self, query, reference_points, input_flatten, input_spatial_shapes, input_level_start_index, input_padding_mask=None):
         """
         :param query                       (N, Length_{query}, C)
@@ -93,6 +131,9 @@ class MSDeformAttn(nn.Module):
 
         :return output                     (N, Length_{query}, C)
         """
+        print("*" * 50)
+        print("querry shape", query.shape)
+        print("inpput_flatten", input_flatten.shape)
         N, Len_q, _ = query.shape
         N, Len_in, _ = input_flatten.shape
         assert (input_spatial_shapes[:, 0] *
@@ -111,32 +152,29 @@ class MSDeformAttn(nn.Module):
         attention_weights = F.softmax(
             attention_weights, -1).view(N, Len_q, self.n_heads, self.n_levels, self.n_points)
 
-        # print("haha", attention_weights.shape)
-
         # N, Len_q, n_heads, n_levels, n_points, 2
-        if reference_points.shape[-1] == 2:
-            offset_normalizer = torch.stack(
-                [input_spatial_shapes[..., 1], input_spatial_shapes[..., 0]], -1)
-            sampling_locations = reference_points[:, :, None, :, None, :] \
-                + sampling_offsets / \
-                offset_normalizer[None, None, None, :, None, :]
-            print(reference_points.shape)
-            print(offset_normalizer.shape)
-            print(sampling_locations.shape)
-        elif reference_points.shape[-1] == 4:
-            sampling_locations = reference_points[:, :, None, :, None, :2] \
-                + sampling_offsets / self.n_points * \
-                reference_points[:, :, None, :, None, 2:] * 0.5
-        else:
-            raise ValueError(
-                'Last dim of reference_points must be 2 or 4, but get {} instead.'.format(reference_points.shape[-1]))
+        offset_normalizer = torch.stack(
+            [input_spatial_shapes[..., 1], input_spatial_shapes[..., 0]], -1)
+        sampling_locations = reference_points[:, :, None, :, None, :] \
+            + sampling_offsets / \
+            offset_normalizer[None, None, None, :, None, :]
+
+        print("ref", reference_points.shape)
+        print("off", sampling_offsets.shape)
+        # torch.set_printoptions(precisioptionon=2, threshold=10000, linewidth=None, sci_mode=False)
+        # print(sampling_offsets[0, :, 0, 0, :, :])
+
         # print(sampling_locations.shape)
         # print("s", )
         # print("x", sampling_locations[0][0][0][0][0] * input_spatial_shapes[0])
         # print(attention_weights.shape)
         output = MSDeformAttnFunction.apply(
             value, input_spatial_shapes, input_level_start_index, sampling_locations, attention_weights, self.im2col_step)
-        attention_weights = attention_weights.view(
-            N, Len_q, self.n_points * self.n_heads)
+
+        attention_weights = self.map_attention_weights(
+            attention_weights, offset_normalizer, sampling_locations, query.shape, input_flatten.shape)
+
+        print("attn_weight", attention_weights.shape)
+
         output = self.output_proj(output)
         return output, attention_weights

@@ -38,6 +38,7 @@ class DeformableDETR(nn.Module):
         """
         super().__init__()
         self.num_queries = num_queries
+        print("num_querry", num_queries)
         self.transformer = transformer
         hidden_dim = transformer.d_model
         self.class_embed = nn.Linear(hidden_dim, num_classes)
@@ -86,25 +87,14 @@ class DeformableDETR(nn.Module):
         # if two-stage, the last class_embed and bbox_embed is for region proposal generation
         num_pred = (transformer.decoder.num_layers +
                     1) if two_stage else transformer.decoder.num_layers
-        if with_box_refine:
-            self.class_embed = _get_clones(self.class_embed, num_pred)
-            self.bbox_embed = _get_clones(self.bbox_embed, num_pred)
-            nn.init.constant_(
-                self.bbox_embed[0].layers[-1].bias.data[2:], -2.0)
-            # hack implementation for iterative bounding box refinement
-            self.transformer.decoder.bbox_embed = self.bbox_embed
-        else:
-            nn.init.constant_(self.bbox_embed.layers[-1].bias.data[2:], -2.0)
-            self.class_embed = nn.ModuleList(
-                [self.class_embed for _ in range(num_pred)])
-            self.bbox_embed = nn.ModuleList(
-                [self.bbox_embed for _ in range(num_pred)])
-            self.transformer.decoder.bbox_embed = None
-        if two_stage:
-            # hack implementation for two-stage
-            self.transformer.decoder.class_embed = self.class_embed
-            for box_embed in self.bbox_embed:
-                nn.init.constant_(box_embed.layers[-1].bias.data[2:], 0.0)
+
+        nn.init.constant_(self.bbox_embed.layers[-1].bias.data[2:], -2.0)
+        self.class_embed = nn.ModuleList(
+            [self.class_embed for _ in range(num_pred)])
+        self.bbox_embed = nn.ModuleList(
+            [self.bbox_embed for _ in range(num_pred)])
+        self.transformer.decoder.bbox_embed = None
+
 
     def forward(self, samples: NestedTensor):
         """ The forward expects a NestedTensor, which consists of:
@@ -178,14 +168,11 @@ class DeformableDETR(nn.Module):
 
         out = {'pred_logits': outputs_class[-1],
                'pred_boxes': outputs_coord[-1]}
-        if self.aux_loss:
-            out['aux_outputs'] = self._set_aux_loss(
-                outputs_class, outputs_coord)
+        
+        out['aux_outputs'] = self._set_aux_loss(
+            outputs_class, outputs_coord)
 
-        if self.two_stage:
-            enc_outputs_coord = enc_outputs_coord_unact.sigmoid()
-            out['enc_outputs'] = {
-                'pred_logits': enc_outputs_class, 'pred_boxes': enc_outputs_coord}
+
         return out
 
     @torch.jit.unused
