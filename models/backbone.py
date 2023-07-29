@@ -264,6 +264,7 @@ class BackboneSwinTransformerFixed(nn.Module):
             out[name] = NestedTensor(x, mask)
         return out
 
+
 class Joiner(nn.Sequential):
     def __init__(self, backbone, position_embedding):
         super().__init__(backbone, position_embedding)

@@ -14,6 +14,7 @@ model, _, _ = build_model(args)
 # summary(model, input_size=(1, 3, 450, 613), depth=100)
 print(model)
 """
+from util.misc import NestedTensor, is_main_process
 
 from collections import OrderedDict
 
@@ -25,6 +26,7 @@ from torchvision.models._utils import IntermediateLayerGetter
 from torchvision.models.swin_transformer import _swin_transformer, Swin_T_Weights
 from typing import Dict, List
 from torchinfo import summary
+
 
 class BackboneSwinTransformerFixed(nn.Module):
     def __init__(self, train_backbone: bool, return_interm_layers: bool):
@@ -56,5 +58,22 @@ class BackboneSwinTransformerFixed(nn.Module):
             self.num_channels = [embed_dim * 8]
         self.body = IntermediateLayerGetter(model,
                                             return_layers={"features": "0"})
+        self.haha = IntermediateLayerGetter(model,
+                                            return_layers={"avgpool": "3"})
 
-x = BackboneSwinTransformerFixed(train_backbone=False, return_interm_layers=False)
+        def forward(self, tensor_list: NestedTensor):
+            xs = self.body(tensor_list.tensors)
+            out: Dict[str, NestedTensor] = {}
+            for name, x in xs.items():
+                m = tensor_list.mask
+                assert m is not None
+                mask = F.interpolate(
+                    m[None].float(), size=x.shape[-2:]).to(torch.bool)[0]
+                out[name] = NestedTensor(x, mask)
+            return out
+
+
+x = BackboneSwinTransformerFixed(
+    train_backbone=False, return_interm_layers=False)
+
+print(x)

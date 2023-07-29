@@ -111,99 +111,11 @@ def rescale_bboxes(out_bbox, size):
     return b.cpu()
 
 
-def show_encoder_result():
-    pass
-
-
-def show_decoder_result():
-    pass
-
-
-@torch.no_grad()
-def inference_one_image(model, device, img_path):
-    # Read the input image using PIL (RGB) cause transform is designed for PIL
-    img = Image.open(img_path).convert("RGB")
-
-    transform = init_inference_transform()
-    tensor, _ = transform(image=img, target=None)
-    tensor_list = tensor.unsqueeze(0)
-
-    # Convert to CV2 image
-    # img_cv2 = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
-
-    # use lists to store the outputs via up-values
-    conv_features, enc_attn_weights, dec_attn_weights = [], [], []
-
-    hooks = [
-        model.backbone[-2].register_forward_hook(
-            lambda self, input, output: conv_features.append(output)
-        ),
-        model.transformer.encoder.layers[-1].self_attn.register_forward_hook(
-            lambda self, input, output: enc_attn_weights.append(
-                output[1])
-        ),
-        model.transformer.decoder.layers[-1].cross_attn.register_forward_hook(
-            lambda self, input, output: dec_attn_weights.append(
-                output[1])
-        ),
-    ]
-
-    inputs = tensor_list.to(device)
-    outputs = model(inputs)
-    # keep only predictions with 0.7+ confidence
-
-    probas = outputs['pred_logits'].softmax(-1)[0, :, :-1].to('cpu')
-    keep = probas.max(-1).values > 0.5
-
-    # convert boxes from [0; 1] to image scales
-    bboxes_scaled = rescale_bboxes(
-        outputs['pred_boxes'][0, keep], img.size)
-
-    # for hook in hooks:
-    #     hook.remove()
-
-    # don't need the list anymore
-    conv_features = conv_features[0]
-    enc_attn_weights = enc_attn_weights[0].to('cpu')
-    dec_attn_weights = dec_attn_weights[0].to('cpu')
-
-    # print(conv_features)
-    print("enc_attn_weights", enc_attn_weights.shape)
-    print("dec_attn_weights", dec_attn_weights.shape)
-
-    # print(model.transformer.encoder.layers[-1])
-    # print(model.transformer.decoder.layers[-1].cross_attn)
-
-    # get the feature map shape
-    h, w = conv_features['0'].tensors.shape[-2:]
-
-    fig, axs = plt.subplots(ncols=len(bboxes_scaled), nrows=2, figsize=(22, 7))
-
-    # Define the blue color map ranging from blue to white
-    cmap = mcolors.LinearSegmentedColormap.from_list(
-        'blue_scale', [(0, 'white'), (1, 'black')])
-
-    for idx, ax_i, (xmin, ymin, xmax, ymax) in zip(keep.nonzero(), axs.T, bboxes_scaled):
-
-        ax = ax_i[0]
-        ax.imshow(dec_attn_weights[0, idx].view(h, w), cmap=cmap)
-        ax.patch.set_edgecolor('red')  # Add black border
-        ax.patch.set_linewidth(2)  # Set border width
-        ax.set_xticks([])
-        ax.set_yticks([])
-        ax.set_title(f'query id: {idx.item()}')
-
-        ax = ax_i[1]
-        ax.imshow(img)
-        ax.add_patch(plt.Rectangle((xmin, ymin), xmax - xmin, ymax - ymin,
-                                   fill=False, color='blue', linewidth=3))
-        ax.axis('off')
-        ax.set_title(CLASSES[probas[idx].argmax()])
-    fig.tight_layout()
-    fig.savefig('feature_map.png')
-
+def show_encoder_result(img, idxs, conv_features, enc_attn_weights):
     # output of the CNN
-    f_map = conv_features['0']
+    # happy code
+    temp = list(conv_features.keys())[0]  # '0' for other or '3' for swin
+    f_map = conv_features[temp]
     print("Encoder attention:      ", enc_attn_weights[0].shape)
     print("Feature map:            ", f_map.tensors.shape)
 
@@ -217,8 +129,7 @@ def inference_one_image(model, device, img_path):
     fact = 32
 
     # let's select 4 reference points for visualization
-    idxs = [(200, 200), (280, 400), (200, 600), (440, 500),
-            (200, 200)]
+
     num_row = 2
     num_col = (len(idxs) + 1) // num_row
 
@@ -254,6 +165,169 @@ def inference_one_image(model, device, img_path):
         ax.set_title(f'self-attention{idx_o}')
 
     fig.savefig('feature_map2.png')
+
+    # convert the figure to a numpy array
+    canvas = fig.canvas
+    canvas.draw()
+    w, h = canvas.get_width_height()
+    img_res = np.frombuffer(canvas.tostring_rgb(),
+                            dtype='uint8').reshape(h, w, 3)
+
+    return img_res
+
+
+def show_decoder_result(img, outputs, conv_features, dec_attn_weights, threshold):
+    probas = outputs['pred_logits'].softmax(-1)[0, :, :-1].to('cpu')
+    keep = probas.max(-1).values > threshold
+
+    print(probas.shape)
+
+    # print(probas.max(-1).values)
+    # print(probas.sigmoid().max(-1).values)
+
+    # convert boxes from [0; 1] to image scales
+    bboxes_scaled = rescale_bboxes(
+        outputs['pred_boxes'][0, keep], img.size)
+    # get the feature map shape
+    print("NUM BOX", len(bboxes_scaled))
+
+    # happy code
+    temp = list(conv_features.keys())[0]  # '0' for other or '3' for swin
+    h, w = conv_features[temp].tensors.shape[-2:]
+
+    fig, axs = plt.subplots(ncols=len(bboxes_scaled), nrows=2, figsize=(22, 7))
+
+    # Define the blue color map ranging from blue to white
+    cmap = mcolors.LinearSegmentedColormap.from_list(
+        'blue_scale', [(0, 'white'), (1, 'black')])
+
+    for idx, ax_i, (xmin, ymin, xmax, ymax) in zip(keep.nonzero(), axs.T, bboxes_scaled):
+        ax = ax_i[0]
+        ax.imshow(dec_attn_weights[0, idx].view(h, w), cmap=cmap)
+        ax.patch.set_edgecolor('red')  # Add black border
+        ax.patch.set_linewidth(2)  # Set border width
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.set_title(f'query id: {idx.item()}')
+
+        ax = ax_i[1]
+        ax.imshow(img)
+        ax.add_patch(plt.Rectangle((xmin, ymin), xmax - xmin, ymax - ymin,
+                                   fill=False, color='blue', linewidth=3))
+        ax.axis('off')
+        ax.set_title(CLASSES[probas[idx].argmax()])
+    fig.tight_layout()
+    fig.savefig('feature_map.png')
+
+    # convert the figure to a numpy array
+    canvas = fig.canvas
+    canvas.draw()
+    w, h = canvas.get_width_height()
+    img_res = np.frombuffer(canvas.tostring_rgb(),
+                            dtype='uint8').reshape(h, w, 3)
+
+    return img_res
+
+
+def show_decoder_result2(img, outputs, conv_features, dec_attn_weights, threshold):
+    probas = outputs['pred_logits'].softmax(-1)[0, :, :-1].to('cpu')
+    keep = probas.max(-1).values > threshold
+
+
+    # convert boxes from [0; 1] to image scales
+    bboxes_scaled = rescale_bboxes(
+        outputs['pred_boxes'][0, keep], img.size)
+    # get the feature map shape
+    print("NUM BOX", len(bboxes_scaled))
+
+    # happy code
+    temp = list(conv_features.keys())[0]  # '0' for other or '3' for swin
+    h, w = conv_features[temp].tensors.shape[-2:]
+
+    fig, axs = plt.subplots(ncols=len(bboxes_scaled), nrows=2, figsize=(22, 7))
+
+    # Define the blue color map ranging from blue to white
+    cmap = mcolors.LinearSegmentedColormap.from_list(
+        'blue_scale', [(0, 'white'), (1, 'black')])
+
+    for idx, ax_i, (xmin, ymin, xmax, ymax) in zip(keep.nonzero(), axs.T, bboxes_scaled):
+        ax = ax_i[0]
+        ax.imshow(dec_attn_weights[0, idx].view(h, w), cmap=cmap)
+        ax.patch.set_edgecolor('red')  # Add black border
+        ax.patch.set_linewidth(2)  # Set border width
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.set_title(f'query id: {idx.item()}')
+
+        ax = ax_i[1]
+        ax.imshow(img)
+        ax.add_patch(plt.Rectangle((xmin, ymin), xmax - xmin, ymax - ymin,
+                                   fill=False, color='blue', linewidth=3))
+        ax.axis('off')
+        ax.set_title(CLASSES[probas[idx].argmax()])
+    fig.tight_layout()
+    fig.savefig('feature_map.png')
+
+    # convert the figure to a numpy array
+    canvas = fig.canvas
+    canvas.draw()
+    w, h = canvas.get_width_height()
+    img_res = np.frombuffer(canvas.tostring_rgb(),
+                            dtype='uint8').reshape(h, w, 3)
+
+    return img_res
+
+@torch.no_grad()
+def inference_one_image(model, device, img_path):
+    # Read the input image using PIL (RGB) cause transform is designed for PIL
+    img = Image.open(img_path).convert("RGB")
+
+    transform = init_inference_transform()
+    tensor, _ = transform(image=img, target=None)
+    tensor_list = tensor.unsqueeze(0)
+
+    # Convert to CV2 image
+    # img_cv2 = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
+
+    # use lists to store the outputs via up-values
+    conv_features, enc_attn_weights, dec_attn_weights = [], [], []
+
+    hooks = [
+        model.backbone[-2].register_forward_hook(
+            lambda self, input, output: conv_features.append(output)
+        ),
+        model.transformer.encoder.layers[-1].self_attn.register_forward_hook(
+            lambda self, input, output: enc_attn_weights.append(
+                output[1])
+        ),
+        model.transformer.decoder.layers[-1].cross_attn.register_forward_hook(
+            lambda self, input, output: dec_attn_weights.append(
+                output[1])
+        ),
+    ]
+
+    inputs = tensor_list.to(device)
+    outputs = model(inputs)
+
+    # for hook in hooks:
+    #     hook.remove()
+
+    # don't need the list anymore
+    conv_features = conv_features[0]
+    enc_attn_weights = enc_attn_weights[0].to('cpu')
+    dec_attn_weights = dec_attn_weights[0].to('cpu')
+
+    # print(conv_features)
+    print("enc_attn_weights", enc_attn_weights.shape)
+    print("dec_attn_weights", dec_attn_weights.shape)
+
+    # print(model.transformer.encoder.layers[-1])
+    # print(model.transformer.decoder.layers[-1].cross_attn)
+    idxs = [(200, 200), (280, 400), (200, 600), (440, 500),
+            (200, 200)]
+    show_encoder_result(img, idxs, conv_features, enc_attn_weights)
+    show_decoder_result(img, outputs, conv_features,
+                        dec_attn_weights, threshold=0.5)
 
     return 1
 

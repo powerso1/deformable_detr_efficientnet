@@ -5,13 +5,16 @@ from PIL import Image
 import io
 
 
-def encode_image(image):
+def encode_image(image, flag=False):
     """
     input: cv2 image
     output: base64 encoded image
     """
+    if image is None:
+        return "None"
     image = np.array(image)
-    image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+    if not flag:
+        image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
     _, im_arr = cv2.imencode('.jpg', image)
     im_bytes = im_arr.tobytes()
     b64_string = base64.b64encode(im_bytes)
@@ -24,10 +27,14 @@ def decode_img(img_base64):
     input: base64 encoded image
     output: cv2 image
     """
+    if img_base64 is None:
+        return []
+
     img = img_base64.encode()
     img = base64.b64decode(img)
     img = np.frombuffer(img, dtype=np.uint8)
     img = cv2.imdecode(img, flags=cv2.IMREAD_COLOR)
+
     return img
 
 

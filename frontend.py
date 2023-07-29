@@ -88,14 +88,39 @@ def recognize(url="http://192.168.1.4:4500/app/detect", body={}):
 
 
 if add_radio in ["res-50_ddetr", "mb-v3L_ddetr", "effi-v2S_ddetr", "swin-T_ddetr", "all models"]:
-
     data = recognize()
     if data is not None:
         data = json.loads(data)
+
+        if data["step_by_step"]:
+            st.markdown(
+                """<hr style="height:5px;border:none;color:#345678;background-color:#345678;" /> """, unsafe_allow_html=True)
+            st.markdown("**Encoder:**")
+
+            encoder = data["attention"]["encoder"]
+            for k, v in encoder.items():
+                if k == "swin-T_ddetr":
+                    continue
+
+                st.text(k)
+                st.image(decode_img(v))
+
+            st.markdown(
+                """<hr style="height:5px;border:none;color:#345678;background-color:#345678;" /> """, unsafe_allow_html=True)
+            st.markdown("**Decoder:**")
+
+            decoder = data["attention"]["decoder"]
+            for k, v in decoder.items():
+                if k == "swin-T_ddetr":
+                    continue
+
+                st.text(k)
+                st.image(decode_img(v))
+
         st.markdown(
             """<hr style="height:5px;border:none;color:#345678;background-color:#345678;" /> """, unsafe_allow_html=True)
         st.markdown("**Output:**")
-        st.code("message: " + data['message'])
         if len(data['result']) > 0:
             result = decode_img(data['result'])
             st.image(result)
+        st.code("message: " + data['message'])
