@@ -177,10 +177,16 @@ def show_encoder_result(img, idxs, conv_features, enc_attn_weights):
 
 
 def show_decoder_result(img, outputs, conv_features, dec_attn_weights, threshold):
-    probas = outputs['pred_logits'].softmax(-1)[0, :, :-1].to('cpu')
+    print("--------")
+
+    probas = outputs['pred_logits'].sigmoid()[0].to('cpu')
     keep = probas.max(-1).values > threshold
 
-    print(probas.shape)
+    print("pred logit shape", outputs["pred_logits"].shape)
+    print("probas shape",probas.shape)
+    print("keep shape", keep.shape)
+
+
 
     # print(probas.max(-1).values)
     # print(probas.sigmoid().max(-1).values)
@@ -229,53 +235,6 @@ def show_decoder_result(img, outputs, conv_features, dec_attn_weights, threshold
     return img_res
 
 
-def show_decoder_result2(img, outputs, conv_features, dec_attn_weights, threshold):
-    probas = outputs['pred_logits'].softmax(-1)[0, :, :-1].to('cpu')
-    keep = probas.max(-1).values > threshold
-
-
-    # convert boxes from [0; 1] to image scales
-    bboxes_scaled = rescale_bboxes(
-        outputs['pred_boxes'][0, keep], img.size)
-    # get the feature map shape
-    print("NUM BOX", len(bboxes_scaled))
-
-    # happy code
-    temp = list(conv_features.keys())[0]  # '0' for other or '3' for swin
-    h, w = conv_features[temp].tensors.shape[-2:]
-
-    fig, axs = plt.subplots(ncols=len(bboxes_scaled), nrows=2, figsize=(22, 7))
-
-    # Define the blue color map ranging from blue to white
-    cmap = mcolors.LinearSegmentedColormap.from_list(
-        'blue_scale', [(0, 'white'), (1, 'black')])
-
-    for idx, ax_i, (xmin, ymin, xmax, ymax) in zip(keep.nonzero(), axs.T, bboxes_scaled):
-        ax = ax_i[0]
-        ax.imshow(dec_attn_weights[0, idx].view(h, w), cmap=cmap)
-        ax.patch.set_edgecolor('red')  # Add black border
-        ax.patch.set_linewidth(2)  # Set border width
-        ax.set_xticks([])
-        ax.set_yticks([])
-        ax.set_title(f'query id: {idx.item()}')
-
-        ax = ax_i[1]
-        ax.imshow(img)
-        ax.add_patch(plt.Rectangle((xmin, ymin), xmax - xmin, ymax - ymin,
-                                   fill=False, color='blue', linewidth=3))
-        ax.axis('off')
-        ax.set_title(CLASSES[probas[idx].argmax()])
-    fig.tight_layout()
-    fig.savefig('feature_map.png')
-
-    # convert the figure to a numpy array
-    canvas = fig.canvas
-    canvas.draw()
-    w, h = canvas.get_width_height()
-    img_res = np.frombuffer(canvas.tostring_rgb(),
-                            dtype='uint8').reshape(h, w, 3)
-
-    return img_res
 
 @torch.no_grad()
 def inference_one_image(model, device, img_path):
@@ -328,6 +287,7 @@ def inference_one_image(model, device, img_path):
     show_encoder_result(img, idxs, conv_features, enc_attn_weights)
     show_decoder_result(img, outputs, conv_features,
                         dec_attn_weights, threshold=0.5)
+
 
     return 1
 

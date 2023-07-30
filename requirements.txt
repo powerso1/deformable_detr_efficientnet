@@ -8,3 +8,4 @@ seaborn
 flask
 streamlit
 flask_cors
+streamlit-image-coordinates

@@ -65,3 +65,14 @@ def check_valid_img(img, min_height=50, min_width=50):
         print('is_numpy: {}, is_color: {}, is_uint8: {}'.format(
             is_numpy, is_color, is_uint8))
     return is_valid
+
+
+def get_ellipse_coords(point):
+    center = point
+    radius = 10
+    return (
+        center[0] - radius,
+        center[1] - radius,
+        center[0] + radius,
+        center[1] + radius,
+    )
