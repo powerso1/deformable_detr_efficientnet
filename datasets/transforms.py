@@ -83,34 +83,37 @@ def hflip(image, target):
     return flipped_image, target
 
 
+def get_size_with_aspect_ratio(image_size, size, max_size=None):
+    w, h = image_size
+    if max_size is not None:
+        min_original_size = float(min((w, h)))
+        max_original_size = float(max((w, h)))
+        if max_original_size / min_original_size * size > max_size:
+            size = int(
+                round(max_size * min_original_size / max_original_size))
+
+    if (w <= h and w == size) or (h <= w and h == size):
+        return (h, w)
+
+    if w < h:
+        ow = size
+        oh = int(size * h / w)
+    else:
+        oh = size
+        ow = int(size * w / h)
+
+    return (oh, ow)
+
+
+def get_size(image_size, size, max_size=None):
+    if isinstance(size, (list, tuple)):
+        return size[::-1]
+    else:
+        return get_size_with_aspect_ratio(image_size, size, max_size)
+
+
 def resize(image, target, size, max_size=None):
     # size can be min_size (scalar) or (w, h) tuple
-    def get_size_with_aspect_ratio(image_size, size, max_size=None):
-        w, h = image_size
-        if max_size is not None:
-            min_original_size = float(min((w, h)))
-            max_original_size = float(max((w, h)))
-            if max_original_size / min_original_size * size > max_size:
-                size = int(
-                    round(max_size * min_original_size / max_original_size))
-
-        if (w <= h and w == size) or (h <= w and h == size):
-            return (h, w)
-
-        if w < h:
-            ow = size
-            oh = int(size * h / w)
-        else:
-            oh = size
-            ow = int(size * w / h)
-
-        return (oh, ow)
-
-    def get_size(image_size, size, max_size=None):
-        if isinstance(size, (list, tuple)):
-            return size[::-1]
-        else:
-            return get_size_with_aspect_ratio(image_size, size, max_size)
 
     size = get_size(image.size, size, max_size)
     rescaled_image = F.resize(image, size)

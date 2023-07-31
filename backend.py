@@ -18,6 +18,7 @@ import cv2
 import random
 from draw_comparision import write_text_to_image_comparision
 from debug import show_encoder_result, show_decoder_result
+import time
 
 CLASSES = [
     'N/A', 'person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus',
@@ -113,28 +114,34 @@ def draw_image(img_pil, raw_output, threshold):
     labels = output[0]["labels"].cpu().tolist()
     boxes = output[0]["boxes"].int().cpu().numpy().tolist()
 
+    list_json = []
     for s, l, b in zip(scores, labels, boxes):
         if s >= threshold:
             plot_one_box(img_cv2, box=b, color=colors[l], label=str(
                 CLASSES[l]) + " " + str(s))
-    return img_cv2
+            list_json.append({"label": CLASSES[l], "score": s, "box": b})
+
+    return img_cv2, list_json
 
 
 @torch.no_grad()
 def inference(DOC_BYTE, model_name, threshold):
     img_pil = decode_pil_img(DOC_BYTE)
     tensor, _ = transform(image=img_pil, target=None)
+    print(tensor.shape)
     tensor_list = tensor.unsqueeze(0).to(device)
 
+    start_time = time.time()
     raw_output = model_dict[model_name](tensor_list)
+    end_time = time.time()
+    elapsed_time = end_time - start_time
+    img_cv2, list_json = draw_image(img_pil, raw_output, threshold)
 
-    img_cv2 = draw_image(img_pil, raw_output, threshold)
-
-    return img_cv2
+    return img_cv2, str(round(elapsed_time, 2)) + " secconds", list_json
 
 
 @torch.no_grad()
-def inference_with_debug(DOC_BYTE, model_name, threshold):
+def inference_with_debug(DOC_BYTE, idxs, model_name, threshold):
     img_pil = decode_pil_img(DOC_BYTE)
     tensor, _ = transform(image=img_pil, target=None)
     tensor_list = tensor.unsqueeze(0).to(device)
@@ -150,10 +157,7 @@ def inference_with_debug(DOC_BYTE, model_name, threshold):
     enc_attn_weights = enc_attn_weights[0].to('cpu')
     dec_attn_weights = dec_attn_weights[0].to('cpu')
 
-    idxs = [(200, 200), (280, 400), (200, 600), (440, 500),
-            (200, 200)]
-
-    img_cv2 = draw_image(img_pil, raw_output, threshold)
+    img_cv2, _ = draw_image(img_pil, raw_output, threshold)
 
     if model_name == "swin-T_ddetr":
         return img_cv2, None, None
@@ -177,14 +181,17 @@ def detect():
         request_data = request.get_json(force=True)
         model_name = request_data.get("model_name")
         threshold = request_data.get("threshold")
+        points = request_data.get("points")
         DOC_BYTE = request_data.get("document")
         step_by_step = request_data.get("step_by_step")
+        runtime = {}
+        result = {}
+        result_json = []
         if model_name == "all models":
             if step_by_step:
-                result = {}
                 for k in model_debug_dict.keys():
                     img_cv2, img_encoder, img_decoder = inference_with_debug(
-                        DOC_BYTE, k, threshold)
+                        DOC_BYTE, points, k, threshold)
                     result[k] = img_cv2
                     attention["encoder"][k] = encode_image(
                         img_encoder, flag=True)
@@ -192,8 +199,9 @@ def detect():
                         img_decoder, flag=True)
 
             else:
-                result = {k: inference(DOC_BYTE, k, threshold)
-                          for k in model_dict.keys()}
+                for k in model_dict.keys():
+                    result[k], runtime[k], _ = inference(
+                        DOC_BYTE, k, threshold)
 
             write_text_to_image_comparision(result)
             img1, img2, img3, img4 = result.values()
@@ -201,7 +209,8 @@ def detect():
             right_col = cv2.vconcat([img2, img4])
             result = cv2.hconcat([left_col, right_col])
         else:
-            result = inference(DOC_BYTE, model_name, threshold)
+            result, runtime, result_json = inference(
+                DOC_BYTE, model_name, threshold)
         return_DOC = encode_image(result)
     # except Exception as e:
     #     message = "Internal Server Error"
@@ -212,13 +221,20 @@ def detect():
             "message": message,
             "attention": attention,
             "result": return_DOC,
-            "step_by_step": step_by_step
+            "step_by_step": step_by_step,
+            "run_time": runtime
         }
+        if result_json:
+            response_data["result_json"] = result_json
 
-    print("threshold", threshold)
     return response_data
 
 
 if __name__ == "__main__":
+    # warm up
+    with torch.no_grad():
+        for model in model_dict.values():
+            tensor = torch.randn(1, 3, 800, 800).to(device)
+            model(tensor)
     # Start server
     app.run(debug=False, host="0.0.0.0", port=4500)

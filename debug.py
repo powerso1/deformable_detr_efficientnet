@@ -79,7 +79,7 @@ def plot_feauture_map(img, keep, conv_features, dec_attn_weights, bboxes_scaled)
     # print(keep.shape)
 
     fig, axs = plt.subplots(ncols=len(bboxes_scaled), nrows=2, figsize=(22, 7))
-    for idx, ax_i, (xmin, ymin, xmax, ymax) in zip(keep, axs.T, bboxes_scaled):
+    for idx, ax_i, (xmin, ymin, xmax, ymax) in zip(keep, axs.T.reshape(-1, 2), bboxes_scaled):
         # ax = ax_i[0]
         # ax.imshow(dec_attn_weights[0, idx].view(h, w))
         # ax.axis('off')
@@ -142,12 +142,9 @@ def show_encoder_result(img, idxs, conv_features, enc_attn_weights):
     # and now let's add the central image, with the reference points as red circles
     fcenter_ax = fig.add_subplot(gs[:, 0:2])
     fcenter_ax.imshow(img)
-    for (y, x) in idxs:
-        scale = img.height / img.size[-2]
-        x = ((x // fact) + 0.5) * fact
-        y = ((y // fact) + 0.5) * fact
+    for (x, y) in idxs:
         fcenter_ax.add_patch(plt.Circle(
-            (x * scale, y * scale), fact // 2, color='r'))
+            (x, y), fact // 2, color='r'))
         fcenter_ax.axis('off')
 
     axs = []
@@ -159,10 +156,10 @@ def show_encoder_result(img, idxs, conv_features, enc_attn_weights):
     # for that point
     for idx_o, ax in zip(idxs, axs):
         idx = (idx_o[0] // fact, idx_o[1] // fact)
-        ax.imshow(sattn[..., idx[0], idx[1]],
+        ax.imshow(sattn[..., idx[1], idx[0]],
                   cmap='cividis', interpolation='nearest')
         ax.axis('off')
-        ax.set_title(f'self-attention{idx_o}')
+        ax.set_title(f'{idx_o}')
 
     fig.savefig('feature_map2.png')
 
@@ -183,10 +180,8 @@ def show_decoder_result(img, outputs, conv_features, dec_attn_weights, threshold
     keep = probas.max(-1).values > threshold
 
     print("pred logit shape", outputs["pred_logits"].shape)
-    print("probas shape",probas.shape)
+    print("probas shape", probas.shape)
     print("keep shape", keep.shape)
-
-
 
     # print(probas.max(-1).values)
     # print(probas.sigmoid().max(-1).values)
@@ -201,13 +196,15 @@ def show_decoder_result(img, outputs, conv_features, dec_attn_weights, threshold
     temp = list(conv_features.keys())[0]  # '0' for other or '3' for swin
     h, w = conv_features[temp].tensors.shape[-2:]
 
-    fig, axs = plt.subplots(ncols=len(bboxes_scaled), nrows=2, figsize=(22, 7))
+    print("len box", len(bboxes_scaled))
+    fig, axs = plt.subplots(
+        ncols=len(bboxes_scaled), nrows=2, figsize=(22, 7))
 
     # Define the blue color map ranging from blue to white
     cmap = mcolors.LinearSegmentedColormap.from_list(
         'blue_scale', [(0, 'white'), (1, 'black')])
 
-    for idx, ax_i, (xmin, ymin, xmax, ymax) in zip(keep.nonzero(), axs.T, bboxes_scaled):
+    for idx, ax_i, (xmin, ymin, xmax, ymax) in zip(keep.nonzero(), axs.T.reshape(-1, 2), bboxes_scaled):
         ax = ax_i[0]
         ax.imshow(dec_attn_weights[0, idx].view(h, w), cmap=cmap)
         ax.patch.set_edgecolor('red')  # Add black border
@@ -233,7 +230,6 @@ def show_decoder_result(img, outputs, conv_features, dec_attn_weights, threshold
                             dtype='uint8').reshape(h, w, 3)
 
     return img_res
-
 
 
 @torch.no_grad()
@@ -287,7 +283,6 @@ def inference_one_image(model, device, img_path):
     show_encoder_result(img, idxs, conv_features, enc_attn_weights)
     show_decoder_result(img, outputs, conv_features,
                         dec_attn_weights, threshold=0.5)
-
 
     return 1
 
