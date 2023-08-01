@@ -1,5 +1,9 @@
-# Set up environment
+# Requirements
+- Python version: 3.8 (tested)
+- CUDA version: 11.7 (tested)
+- CUDA version: 11.5 (this version maybe conflict with  build MSDeformAttn)
 
+# Set up environment
 ## create conda environment
 
 ```bash
@@ -51,13 +55,82 @@ content of **train_efficientnet.sh**
 set -x
 
 python -u main.py \
-    --num_feature_levels 1 \
-    --output_dir "exps/effi_v2s_deformable_detr" \
+    --output_dir "exps/effi-v2S_ddetr" \
     --backbone "efficientnet" \
-    --batch_size 2 \
-    --lr 1e-4 \
-    --lr_backbone 1e-5
+    --batch_size 2
 ```
 >**Note**\
 Use arg **--coco_path "path/to/coco"** to update coco path\
 **path/to/coco** is coco dataset directory in previous step
+
+# Download model weight
+download weight folder and move it inside repo folder (same level as main.py)
+
+https://drive.google.com/drive/folders/1F4WzkFU0agqYoJIAwQ3FMZNb7-PQbuI1?usp=drive_link
+
+
+
+In each model there are 3 files
+| File Name | Description |
+| --- | --- |
+| `checkpoint0049.pth` | model weight |
+| `log.txt` | evaluation at each epoch on COCO train dataset |
+| `train.log` | log during training |
+
+# Inference
+- Inference a image
+```
+python inference.py --backbone name_backbone  --inf_path path/to/image.png
+```
+- Inference a folder with multiple images
+```
+python inference.py --backbone name_backbone  --folder --inf_path path/to/folder
+```
+>**Note**\
+replace name_backbone with one of the following:
+
+| name_backbone | Model using |
+| --- | --- |
+| resnet50 | res-50_ddetr |
+| efficientnet | effi-v2S_ddetr |
+| mobilenet | mb-v3L_ddetr |
+| swin | swin-T_ddetr |
+
+# Inference with GUI
+- Run backend using flask (This will load 4 model and 4 debug model. Config file `backend.py` if needed)
+```
+python backend
+```
+- Run fronend using streamlit
+```
+streamlit run frontend.py  
+```
+
+Video demo: https://www.youtube.com/watch?v=8VNTvP90f5Y
+# Run bench mark on google colab
+https://colab.research.google.com/drive/1rxxCjrq1dEC8e7-bGUoSTMd1CkZ4CGwR
+
+
+# Explain file
+## Python file
+| File name | Description |
+| --- | --- |
+| main.py | train and evaluate model |
+| inference.py | running inference on images |
+| frontend.py | |
+| backend.py  | |
+| draw_coco.py | draw lablel of COCO train dataset|
+| draw_comparision.py | combine COCO label and result of detection as an image | 
+| benchmark.py| benchmark to know the FPS of a model |
+| debug.py| Show attention weight of encoder and decoder |
+| extract_train_time.py | extract training time of file `weight/train.log`  |
+| inspect_eval.py | get AP of each class at an evaluation |
+| visualize.py | plot loss and AP of the training process |
+
+## Bash file
+| File name | Description |
+| --- | --- |
+| benchmark_resnet.sh | example of running `benchmark.py` |   
+| train_dist*.sh | train model distributively on 2 GPU |
+| train_*.sh | train model |
+| view.sh | view the last line of `weight/train.log` |

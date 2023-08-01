@@ -174,6 +174,6 @@ def evaluate(model, criterion, postprocessors, data_loader, base_ds, device, out
             stats['coco_eval_masks'] = coco_evaluator.coco_eval['segm'].stats.tolist()
     if panoptic_res is not None:
         stats['PQ_all'] = panoptic_res["All"]
-        stats['PQ_th'] =  panoptic_res["Things"]
+        stats['PQ_th'] = panoptic_res["Things"]
         stats['PQ_st'] = panoptic_res["Stuff"]
     return stats, coco_evaluator
