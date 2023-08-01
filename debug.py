@@ -92,7 +92,7 @@ def plot_feauture_map(img, keep, conv_features, dec_attn_weights, bboxes_scaled)
         # ax.set_title(CLASSES[probas[idx].argmax()])
         pass
     fig.tight_layout()
-    fig.savefig('feature_map.png')
+    # fig.savefig('feature_map.png')
 
 
 # for output bounding box post-processing
@@ -161,7 +161,7 @@ def show_encoder_result(img, idxs, conv_features, enc_attn_weights):
         ax.axis('off')
         ax.set_title(f'{idx_o}')
 
-    fig.savefig('feature_map2.png')
+    # fig.savefig('feature_map2.png')
 
     # convert the figure to a numpy array
     canvas = fig.canvas
@@ -220,7 +220,7 @@ def show_decoder_result(img, outputs, conv_features, dec_attn_weights, threshold
         ax.axis('off')
         ax.set_title(CLASSES[probas[idx].argmax()])
     fig.tight_layout()
-    fig.savefig('feature_map.png')
+    # fig.savefig('feature_map.png')
 
     # convert the figure to a numpy array
     canvas = fig.canvas
