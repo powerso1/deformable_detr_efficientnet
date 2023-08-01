@@ -3,7 +3,6 @@
 set -x
 
 python -u main.py \
-    --num_feature_levels 1 \
-    --output_dir "exps/effi_v2s_deformable_detr2" \
+    --output_dir "exps/effi-v2S_ddetr" \
     --backbone "efficientnet" \
     --batch_size 2
