@@ -117,8 +117,8 @@ https://colab.research.google.com/drive/1rxxCjrq1dEC8e7-bGUoSTMd1CkZ4CGwR
 | --- | --- |
 | main.py | train and evaluate model |
 | inference.py | running inference on images |
-| frontend.py | |
-| backend.py  | |
+| frontend.py | web UI to inference image using streamlit|
+| backend.py  | host a backend using Flask |
 | draw_coco.py | draw lablel of COCO train dataset|
 | draw_comparision.py | combine COCO label and result of detection as an image | 
 | benchmark.py| benchmark to know the FPS of a model |
